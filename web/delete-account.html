@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eliminar cuenta — NakanoFood</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: #1a1a1a;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 36px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      background: #2E7D32;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+    }
+
+    .logo-text {
+      font-size: 22px;
+      font-weight: 700;
+      color: #2E7D32;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    p {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .warning-box {
+      background: #fff3e0;
+      border: 1px solid #ffcc80;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #e65100;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #333;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="email"]:focus {
+      border-color: #2E7D32;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 90px;
+      margin-bottom: 20px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      border-color: #2E7D32;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 14px;
+      background: #c62828;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button[type="submit"]:hover {
+      background: #b71c1c;
+    }
+
+    .success {
+      display: none;
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      color: #2E7D32;
+      font-weight: 600;
+      font-size: 15px;
+      margin-top: 16px;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    a { color: #2E7D32; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">🍽️</div>
+      <div class="logo-text">NakanoFood</div>
+    </div>
+
+    <h1>Solicitar eliminación de cuenta</h1>
+    <p>
+      Si deseas eliminar tu cuenta y todos tus datos asociados
+      (productos, recetas, planificación alimentaria y compras),
+      completa el formulario a continuación.
+    </p>
+
+    <div class="warning-box">
+      ⚠️ Esta acción es <strong>permanente e irreversible</strong>.
+      Una vez procesada tu solicitud, no podremos recuperar tus datos.
+    </div>
+
+    <form id="deleteForm">
+      <label for="email">Correo electrónico de tu cuenta</label>
+      <input
+        type="email"
+        id="email"
+        name="email"
+        placeholder="tucorreo@ejemplo.com"
+        required
+      />
+
+      <label for="reason">Motivo (opcional)</label>
+      <textarea
+        id="reason"
+        name="reason"
+        placeholder="Cuéntanos por qué deseas eliminar tu cuenta..."
+      ></textarea>
+
+      <button type="submit">Solicitar eliminación de cuenta</button>
+    </form>
+
+    <div class="success" id="successMsg">
+      ✅ Solicitud recibida. Procesaremos la eliminación de tu cuenta
+      en un plazo de <strong>7 días hábiles</strong>.
+    </div>
+
+    <p class="note">
+      También puedes eliminar tu cuenta directamente desde la app:<br />
+      <strong>Perfil → Eliminar cuenta</strong>
+    </p>
+  </div>
+
+  <script>
+    document.getElementById('deleteForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      // Abre el cliente de correo con la solicitud pre-rellenada
+      const subject = encodeURIComponent('Solicitud de eliminación de cuenta — NakanoFood');
+      const body = encodeURIComponent(
+        'Solicito la eliminación de mi cuenta y todos mis datos asociados.\n\n' +
+        'Correo de la cuenta: ' + email + '\n\n' +
+        'Motivo: ' + (document.getElementById('reason').value || 'No especificado')
+      );
+      window.location.href = 'mailto:vanastreadev+nakanofood@gmail.com?subject=' + subject + '&body=' + body;
+      document.getElementById('deleteForm').style.display = 'none';
+      document.getElementById('successMsg').style.display = 'block';
+    });
+  </script>
+</body>
+</html>

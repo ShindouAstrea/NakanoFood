@@ -160,6 +160,18 @@ class ProfileScreen extends ConsumerWidget {
                         .signOut();
                   },
                 ),
+                const Divider(height: 1, indent: 52),
+                ListTile(
+                  leading: const Icon(Icons.delete_forever_rounded,
+                      color: Colors.red),
+                  title: const Text('Eliminar cuenta',
+                      style: TextStyle(color: Colors.red)),
+                  subtitle: const Text(
+                    'Borra tu cuenta y todos tus datos permanentemente',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  onTap: () => _confirmDeleteAccount(context, ref),
+                ),
               ],
             ],
           ),
@@ -338,6 +350,35 @@ class ProfileScreen extends ConsumerWidget {
     }
     return 'Personalizado';
   }
+}
+
+// ── Delete account dialog ────────────────────────────────────────────────────
+
+Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('¿Eliminar cuenta?'),
+      content: const Text(
+        'Esta acción es permanente e irreversible.\n\n'
+        'Se borrarán tu cuenta y todos tus datos: productos, recetas, '
+        'planificación y compras.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Eliminar'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  await ref.read(authNotifierProvider.notifier).deleteAccount();
 }
 
 // ── Color swatch ────────────────────────────────────────────────────────────

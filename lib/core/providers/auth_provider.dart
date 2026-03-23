@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
+import '../database/database_helper.dart';
 
 // ─── Current user ─────────────────────────────────────────────────────────────
 
@@ -80,4 +81,44 @@ class AuthNotifier extends AsyncNotifier<User?> {
     await Supabase.instance.client.auth.signOut();
     state = const AsyncData(null);
   }
+
+  /// Elimina todos los datos del usuario en Supabase (via CASCADE desde auth.users)
+  /// y borra la base de datos local. No reversible.
+  Future<void> deleteAccount() async {
+    state = const AsyncLoading();
+    try {
+      // 1. Borrar cuenta + datos en Supabase (CASCADE borra todas las tablas)
+      await Supabase.instance.client.rpc('delete_user_account');
+    } catch (e) {
+      debugPrint('[Auth] deleteAccount Supabase error: $e');
+    }
+    try {
+      // 2. Limpiar base de datos local
+      final db = await DatabaseHelper.instance.database;
+      for (final table in _localTables) {
+        await db.delete(table);
+      }
+    } catch (e) {
+      debugPrint('[Auth] deleteAccount local DB error: $e');
+    }
+    state = const AsyncData(null);
+  }
 }
+
+const _localTables = [
+  'shopping_items',
+  'shopping_sessions',
+  'meal_plan_items',
+  'meal_plans',
+  'meal_category_days',
+  'meal_categories',
+  'recipe_images',
+  'recipe_steps',
+  'recipe_ingredients',
+  'recipes',
+  'product_price_history',
+  'nutritional_values',
+  'products',
+  'product_subcategories',
+  'product_categories',
+];
