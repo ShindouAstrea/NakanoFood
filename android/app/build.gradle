@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.nakanofood.nakano_food"
+    namespace "com.astrea.nakano_food"
     compileSdk flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
 
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.nakanofood.nakano_food"
+        applicationId "com.astrea.nakano_food"
         minSdk 21
         targetSdk flutter.targetSdkVersion
         versionCode flutter.versionCode
@@ -59,6 +59,6 @@ flutter {
 }
 
 dependencies {
-    coreLibraryDesugaring "com.android.tools.build:desugaring:2.0.4"
+    coreLibraryDesugaring "com.android.tools.build:desugar_jdk_libs:2.0.4"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }
