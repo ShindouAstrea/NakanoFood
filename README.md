@@ -1,6 +1,6 @@
 # NakanoFood
 
-Aplicación móvil Flutter para gestión de despensa, recetas y planificación alimentaria.
+Aplicación móvil Flutter para gestión de despensa, recetas y planificación alimentaria. 
 
 ## Módulos
 
