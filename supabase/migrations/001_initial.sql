@@ -140,7 +140,7 @@ create policy "insert own" on recipe_ingredients for insert
 -- ── recipe_steps ─────────────────────────────────────────────
 create table recipe_steps (
   id text primary key,
-  recipe_id text references recipe_ingredients(id) on delete cascade,
+  recipe_id text references recipes(id) on delete cascade,
   step_number integer not null,
   description text not null,
   user_id uuid references auth.users(id) on delete cascade,

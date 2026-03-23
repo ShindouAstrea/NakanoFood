@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -71,7 +72,8 @@ class SyncService {
         await _uploadTable(db, table, userId!);
       }
       ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SyncService] fullUpload error: $e\n$st');
       ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
     }
   }
@@ -89,7 +91,8 @@ class SyncService {
         await _downloadTable(db, table, userId!);
       }
       ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SyncService] fullDownload error: $e\n$st');
       ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
     }
   }
@@ -107,7 +110,8 @@ class SyncService {
         await _uploadPending(db, table, userId!);
       }
       ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[SyncService] _runSync error: $e\n$st');
       ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
     }
   }
@@ -136,7 +140,7 @@ class SyncService {
     if (rows.isEmpty) return;
 
     // Strip SQLite-only columns that don't exist in Supabase
-    final cleaned = rows.map((r) => _prepareForSupabase(r, uid)).toList();
+    final cleaned = rows.map((r) => _prepareForSupabase(r, uid, table)).toList();
     await _client.from(table).upsert(cleaned);
 
     final now = DateTime.now().toIso8601String();
@@ -155,7 +159,7 @@ class SyncService {
       whereArgs: [uid],
     );
     if (rows.isEmpty) return;
-    final cleaned = rows.map((r) => _prepareForSupabase(r, uid)).toList();
+    final cleaned = rows.map((r) => _prepareForSupabase(r, uid, table)).toList();
     await _client.from(table).upsert(cleaned);
 
     if (await _hasColumn(db, table, 'synced_at')) {
@@ -192,12 +196,22 @@ class SyncService {
     }
   }
 
+  /// Columns that exist in local SQLite (legacy migrations) but NOT in Supabase.
+  static const _localOnlyColumns = <String, List<String>>{
+    // meal_plans had title + recipe_id before v5 migration; SQLite can't DROP COLUMN
+    'meal_plans': ['title', 'recipe_id'],
+  };
+
   Map<String, dynamic> _prepareForSupabase(
-      Map<String, dynamic> row, String uid) {
+      Map<String, dynamic> row, String uid, String table) {
     final map = Map<String, dynamic>.from(row);
     map['user_id'] = uid;
     // Remove local-only sync tracking column before uploading
     map.remove('synced_at');
+    // Remove columns that only exist locally (legacy migrations)
+    for (final col in (_localOnlyColumns[table] ?? [])) {
+      map.remove(col);
+    }
     return map;
   }
 
