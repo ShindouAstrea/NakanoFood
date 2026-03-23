@@ -7,6 +7,7 @@ import 'add_edit_product_screen.dart';
 import 'product_detail_screen.dart';
 import 'shopping_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/skeletons/product_card_skeleton.dart';
 
 class PantryScreen extends ConsumerStatefulWidget {
   const PantryScreen({super.key});
@@ -248,8 +249,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                     ),
                   );
                 },
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const ProductListSkeleton(),
                 error: (e, _) => Center(child: Text('Error: $e')),
               ),
             ),

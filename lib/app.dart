@@ -9,6 +9,7 @@ import 'features/pantry/screens/pantry_screen.dart';
 import 'features/recipes/screens/recipes_screen.dart';
 import 'features/meal_planning/screens/meal_planning_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'shared/widgets/splash_screen.dart';
 
 class NakanoFoodApp extends ConsumerWidget {
   const NakanoFoodApp({super.key});
@@ -50,9 +51,7 @@ class _AuthGate extends ConsumerWidget {
         if (authState.session != null) return const MainNavigation();
         return const LoginScreen();
       },
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const SplashScreen(),
       error: (_, __) => const MainNavigation(),
     );
   }

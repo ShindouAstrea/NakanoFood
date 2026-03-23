@@ -7,6 +7,7 @@ import '../models/meal_plan.dart';
 import 'add_edit_meal_screen.dart';
 import 'manage_categories_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/skeletons/meal_card_skeleton.dart';
 
 class MealPlanningScreen extends ConsumerStatefulWidget {
   const MealPlanningScreen({super.key});
@@ -137,8 +138,7 @@ class _MealPlanningScreenState
                   ),
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const MealListSkeleton(),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ),

@@ -6,6 +6,7 @@ import '../widgets/recipe_card.dart';
 import 'add_edit_recipe_screen.dart';
 import 'recipe_detail_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/skeletons/recipe_card_skeleton.dart';
 
 class RecipesScreen extends ConsumerWidget {
   const RecipesScreen({super.key});
@@ -99,8 +100,7 @@ class RecipesScreen extends ConsumerWidget {
                   ),
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const RecipeListSkeleton(),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ),
