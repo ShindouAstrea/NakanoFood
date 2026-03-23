@@ -189,6 +189,7 @@ class Product {
   final String? subcategoryId;
   final String unit;
   final double lastPrice;
+  final double priceRefQty;
   final double quantityToMaintain;
   final double currentQuantity;
   final String? lastPlace;
@@ -209,6 +210,7 @@ class Product {
     this.subcategoryId,
     required this.unit,
     this.lastPrice = 0,
+    this.priceRefQty = 1.0,
     this.quantityToMaintain = 1,
     this.currentQuantity = 0,
     this.lastPlace,
@@ -224,6 +226,8 @@ class Product {
   bool get isLow => currentQuantity < quantityToMaintain;
   bool get isOut => currentQuantity <= 0;
 
+  double get pricePerUnit => priceRefQty > 0 ? lastPrice / priceRefQty : lastPrice;
+
   double get neededQuantity =>
       isLow ? (quantityToMaintain - currentQuantity) : 0;
 
@@ -235,6 +239,7 @@ class Product {
       subcategoryId: map['subcategory_id'] as String?,
       unit: map['unit'] as String? ?? 'unidad',
       lastPrice: (map['last_price'] as num?)?.toDouble() ?? 0,
+      priceRefQty: (map['price_ref_qty'] as num?)?.toDouble() ?? 1.0,
       quantityToMaintain:
           (map['quantity_to_maintain'] as num?)?.toDouble() ?? 1,
       currentQuantity: (map['current_quantity'] as num?)?.toDouble() ?? 0,
@@ -256,6 +261,7 @@ class Product {
       'subcategory_id': subcategoryId,
       'unit': unit,
       'last_price': lastPrice,
+      'price_ref_qty': priceRefQty,
       'quantity_to_maintain': quantityToMaintain,
       'current_quantity': currentQuantity,
       'last_place': lastPlace,
@@ -272,6 +278,7 @@ class Product {
     String? subcategoryId,
     String? unit,
     double? lastPrice,
+    double? priceRefQty,
     double? quantityToMaintain,
     double? currentQuantity,
     String? lastPlace,
@@ -292,6 +299,7 @@ class Product {
       subcategoryId: clearSubcategory ? null : (subcategoryId ?? this.subcategoryId),
       unit: unit ?? this.unit,
       lastPrice: lastPrice ?? this.lastPrice,
+      priceRefQty: priceRefQty ?? this.priceRefQty,
       quantityToMaintain: quantityToMaintain ?? this.quantityToMaintain,
       currentQuantity: currentQuantity ?? this.currentQuantity,
       lastPlace: lastPlace ?? this.lastPlace,

@@ -168,7 +168,7 @@ class _AddEditMealScreenState extends ConsumerState<AddEditMealScreen> {
             recipesAsync.when(
               data: (recipes) {
                 return DropdownButtonFormField<String?>(
-                  value: _selectedRecipeId,
+                  initialValue: _selectedRecipeId,
                   decoration: const InputDecoration(
                     labelText: 'Seleccionar receta',
                     prefixIcon: Icon(Icons.menu_book_outlined),

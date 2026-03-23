@@ -13,6 +13,8 @@ class ShoppingItem {
   final bool isPurchased;
   final String? categoryId;
   final String? categoryName;
+  final String? subcategoryId;
+  final String? subcategoryName;
   final String? lastPlace;
 
   const ShoppingItem({
@@ -28,6 +30,8 @@ class ShoppingItem {
     this.isPurchased = false,
     this.categoryId,
     this.categoryName,
+    this.subcategoryId,
+    this.subcategoryName,
     this.lastPlace,
   });
 
@@ -49,6 +53,8 @@ class ShoppingItem {
       isPurchased: (map['is_purchased'] as int? ?? 0) == 1,
       categoryId: map['category_id'] as String?,
       categoryName: map['category_name'] as String?,
+      subcategoryId: map['subcategory_id'] as String?,
+      subcategoryName: map['subcategory_name'] as String?,
       lastPlace: map['last_place'] as String?,
     );
   }
@@ -67,6 +73,8 @@ class ShoppingItem {
       'is_purchased': isPurchased ? 1 : 0,
       'category_id': categoryId,
       'category_name': categoryName,
+      'subcategory_id': subcategoryId,
+      'subcategory_name': subcategoryName,
       'last_place': lastPlace,
     };
   }
@@ -84,6 +92,8 @@ class ShoppingItem {
     bool? isPurchased,
     String? categoryId,
     String? categoryName,
+    String? subcategoryId,
+    String? subcategoryName,
     String? lastPlace,
   }) {
     return ShoppingItem(
@@ -99,6 +109,8 @@ class ShoppingItem {
       isPurchased: isPurchased ?? this.isPurchased,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
+      subcategoryId: subcategoryId ?? this.subcategoryId,
+      subcategoryName: subcategoryName ?? this.subcategoryName,
       lastPlace: lastPlace ?? this.lastPlace,
     );
   }

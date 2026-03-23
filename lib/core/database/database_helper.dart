@@ -18,9 +18,23 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+          'ALTER TABLE shopping_items ADD COLUMN subcategory_id TEXT');
+      await db.execute(
+          'ALTER TABLE shopping_items ADD COLUMN subcategory_name TEXT');
+    }
+    if (oldVersion < 3) {
+      await db.execute(
+          'ALTER TABLE products ADD COLUMN price_ref_qty REAL DEFAULT 1.0');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -51,6 +65,7 @@ class DatabaseHelper {
         subcategory_id TEXT,
         unit TEXT NOT NULL DEFAULT 'unidad',
         last_price REAL DEFAULT 0,
+        price_ref_qty REAL DEFAULT 1.0,
         quantity_to_maintain REAL DEFAULT 1,
         current_quantity REAL DEFAULT 0,
         last_place TEXT,
@@ -106,6 +121,8 @@ class DatabaseHelper {
         is_purchased INTEGER DEFAULT 0,
         category_id TEXT,
         category_name TEXT,
+        subcategory_id TEXT,
+        subcategory_name TEXT,
         last_place TEXT,
         FOREIGN KEY (session_id) REFERENCES shopping_sessions(id) ON DELETE CASCADE
       )

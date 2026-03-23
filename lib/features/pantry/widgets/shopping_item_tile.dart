@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/shopping_session.dart';
 
+String _fmtN(double v) =>
+    v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+
 class ShoppingItemTile extends StatelessWidget {
   final ShoppingItem item;
   final VoidCallback onTap;
@@ -14,7 +17,16 @@ class ShoppingItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isPurchased = item.isPurchased;
+
+    final textColor = isPurchased
+        ? colorScheme.onSurface.withAlpha(80)
+        : colorScheme.onSurface;
+
+    final subtitleColor = isPurchased
+        ? colorScheme.onSurface.withAlpha(60)
+        : colorScheme.onSurface.withAlpha(140);
 
     return ListTile(
       onTap: onTap,
@@ -27,50 +39,82 @@ class ShoppingItemTile extends StatelessWidget {
         item.productName,
         style: theme.textTheme.bodyMedium?.copyWith(
           decoration: isPurchased ? TextDecoration.lineThrough : null,
-          color: isPurchased ? Colors.grey : null,
+          decorationColor: textColor,
+          color: textColor,
           fontWeight: FontWeight.w500,
         ),
       ),
       subtitle: Text(
         isPurchased
-            ? '${(item.actualQuantity ?? item.plannedQuantity).toStringAsFixed(1)} ${item.unit} · \$${item.actualPrice > 0 ? item.actualPrice.toStringAsFixed(0) : item.plannedPrice.toStringAsFixed(0)}'
-            : '${item.plannedQuantity.toStringAsFixed(item.plannedQuantity == item.plannedQuantity.roundToDouble() ? 0 : 1)} ${item.unit}${item.plannedPrice > 0 ? ' · Est. \$${item.plannedPrice.toStringAsFixed(0)}' : ''}',
+            ? '${_fmtN(item.actualQuantity ?? item.plannedQuantity)} ${item.unit}'
+              ' · Total \$${item.totalCost.toStringAsFixed(0)}'
+            : '${_fmtN(item.plannedQuantity)} ${item.unit}'
+              '${item.plannedPrice > 0 ? ' · Est. \$${(item.plannedPrice * item.plannedQuantity).toStringAsFixed(0)}' : ''}',
         style: theme.textTheme.bodySmall?.copyWith(
-          color: isPurchased ? Colors.grey.shade400 : Colors.grey.shade600,
+          color: subtitleColor,
           decoration: isPurchased ? TextDecoration.lineThrough : null,
+          decorationColor: subtitleColor,
         ),
       ),
-      trailing: isPurchased
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '\$${item.totalCost.toStringAsFixed(0)}',
-                style: TextStyle(
-                  color: Colors.green.shade700,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            )
-          : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Comprar',
-                style: TextStyle(
-                  color: Colors.blue.shade600,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 12,
-                ),
-              ),
-            ),
+      trailing: isPurchased ? _PurchasedBadge(item: item) : const _BuyBadge(),
+    );
+  }
+}
+
+class _PurchasedBadge extends StatelessWidget {
+  final ShoppingItem item;
+  const _PurchasedBadge({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark
+        ? Colors.green.withAlpha(30)
+        : Colors.green.shade50;
+    final textColor = isDark
+        ? Colors.green.shade300
+        : Colors.green.shade700;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: textColor.withAlpha(80)),
+      ),
+      child: Text(
+        '\$${item.totalCost.toStringAsFixed(0)}',
+        style: TextStyle(
+          color: textColor,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _BuyBadge extends StatelessWidget {
+  const _BuyBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withAlpha(18),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.primary.withAlpha(60)),
+      ),
+      child: Text(
+        'Comprar',
+        style: TextStyle(
+          color: colorScheme.primary,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }

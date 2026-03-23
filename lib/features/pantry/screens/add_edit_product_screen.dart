@@ -6,6 +6,10 @@ import '../providers/pantry_provider.dart';
 
 const _uuid = Uuid();
 
+/// Formatea un double eliminando el decimal cuando es entero (2.0 → "2").
+String _fmtN(double v) =>
+    v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+
 class AddEditProductScreen extends ConsumerStatefulWidget {
   final Product? product;
 
@@ -20,6 +24,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _lastPriceCtrl;
+  late final TextEditingController _priceRefQtyCtrl;
   late final TextEditingController _quantityToMaintainCtrl;
   late final TextEditingController _currentQuantityCtrl;
   late final TextEditingController _lastPlaceCtrl;
@@ -51,12 +56,18 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
     super.initState();
     final p = widget.product;
     _nameCtrl = TextEditingController(text: p?.name ?? '');
-    _lastPriceCtrl =
-        TextEditingController(text: p?.lastPrice != null && p!.lastPrice > 0 ? p.lastPrice.toString() : '');
+    _lastPriceCtrl = TextEditingController(
+        text: p?.lastPrice != null && p!.lastPrice > 0
+            ? _fmtN(p.lastPrice)
+            : '');
+    _priceRefQtyCtrl = TextEditingController(
+        text: p?.priceRefQty != null && p!.priceRefQty != 1.0
+            ? _fmtN(p.priceRefQty)
+            : '1');
     _quantityToMaintainCtrl = TextEditingController(
-        text: p?.quantityToMaintain.toString() ?? '1');
+        text: p != null ? _fmtN(p.quantityToMaintain) : '1');
     _currentQuantityCtrl = TextEditingController(
-        text: p?.currentQuantity.toString() ?? '0');
+        text: p != null ? _fmtN(p.currentQuantity) : '0');
     _lastPlaceCtrl = TextEditingController(text: p?.lastPlace ?? '');
     _notesCtrl = TextEditingController(text: p?.notes ?? '');
     _newCategoryCtrl = TextEditingController();
@@ -68,15 +79,17 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
     if (p?.nutritionalValues != null) {
       final nv = p!.nutritionalValues!;
       _showNutritional = true;
-      _kcalCtrl.text = nv.kcal?.toString() ?? '';
-      _carbsCtrl.text = nv.carbs?.toString() ?? '';
-      _sugarsCtrl.text = nv.sugars?.toString() ?? '';
-      _fiberCtrl.text = nv.fiber?.toString() ?? '';
-      _totalFatsCtrl.text = nv.totalFats?.toString() ?? '';
-      _saturatedFatsCtrl.text = nv.saturatedFats?.toString() ?? '';
-      _proteinCtrl.text = nv.proteins?.toString() ?? '';
-      _sodiumCtrl.text = nv.sodium?.toString() ?? '';
-      _servingSizeCtrl.text = nv.servingSize?.toString() ?? '';
+      _kcalCtrl.text = nv.kcal != null ? _fmtN(nv.kcal!) : '';
+      _carbsCtrl.text = nv.carbs != null ? _fmtN(nv.carbs!) : '';
+      _sugarsCtrl.text = nv.sugars != null ? _fmtN(nv.sugars!) : '';
+      _fiberCtrl.text = nv.fiber != null ? _fmtN(nv.fiber!) : '';
+      _totalFatsCtrl.text = nv.totalFats != null ? _fmtN(nv.totalFats!) : '';
+      _saturatedFatsCtrl.text =
+          nv.saturatedFats != null ? _fmtN(nv.saturatedFats!) : '';
+      _proteinCtrl.text = nv.proteins != null ? _fmtN(nv.proteins!) : '';
+      _sodiumCtrl.text = nv.sodium != null ? _fmtN(nv.sodium!) : '';
+      _servingSizeCtrl.text =
+          nv.servingSize != null ? _fmtN(nv.servingSize!) : '';
       _servingUnitCtrl.text = nv.servingUnit ?? '';
     }
   }
@@ -85,6 +98,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _lastPriceCtrl.dispose();
+    _priceRefQtyCtrl.dispose();
     _quantityToMaintainCtrl.dispose();
     _currentQuantityCtrl.dispose();
     _lastPlaceCtrl.dispose();
@@ -120,6 +134,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
       subcategoryId: _selectedSubcategoryId,
       unit: _selectedUnit,
       lastPrice: double.tryParse(_lastPriceCtrl.text) ?? 0,
+      priceRefQty: double.tryParse(_priceRefQtyCtrl.text) ?? 1.0,
       quantityToMaintain:
           double.tryParse(_quantityToMaintainCtrl.text) ?? 1,
       currentQuantity: double.tryParse(_currentQuantityCtrl.text) ?? 0,
@@ -190,7 +205,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Name
-            _SectionTitle(title: 'Información General'),
+            const _SectionTitle(title: 'Información General'),
             const SizedBox(height: 8),
             TextFormField(
               controller: _nameCtrl,
@@ -289,7 +304,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
             const SizedBox(height: 16),
 
             // Quantities and Price
-            _SectionTitle(title: 'Inventario'),
+            const _SectionTitle(title: 'Inventario'),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -325,28 +340,50 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
             Row(
               children: [
                 Expanded(
+                  flex: 2,
                   child: TextFormField(
                     controller: _lastPriceCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'Último precio',
+                      labelText: 'Precio ref.',
                       prefixText: '\$ ',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                         decimal: true),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
+                  flex: 1,
                   child: TextFormField(
-                    controller: _lastPlaceCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Último lugar de compra',
-                      hintText: 'Ej: Supermercado A',
+                    controller: _priceRefQtyCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'por',
+                      suffixText: _selectedUnit,
                     ),
-                    textCapitalization: TextCapitalization.words,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Ej: \$5000 por 250 gramos',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withAlpha(120),
+                  ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _lastPlaceCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Último lugar de compra',
+                hintText: 'Ej: Supermercado A',
+              ),
+              textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -386,7 +423,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _SectionTitle(title: 'Valores Nutricionales'),
+            const _SectionTitle(title: 'Valores Nutricionales'),
             Switch(
               value: _showNutritional,
               onChanged: (v) => setState(() => _showNutritional = v),

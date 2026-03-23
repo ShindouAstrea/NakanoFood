@@ -25,34 +25,50 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final catColor = _parseColor(product.categoryColor);
     final isLow = product.isLow;
+    final isOut = product.isOut;
+
+    // Stock status
+    final Color statusColor = isOut
+        ? Colors.red.shade600
+        : isLow
+            ? Colors.orange.shade700
+            : Colors.green.shade600;
+    final double progress = product.quantityToMaintain > 0
+        ? (product.currentQuantity / product.quantityToMaintain).clamp(0.0, 1.0)
+        : 0;
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Category color indicator
               Container(
                 width: 4,
-                height: 56,
+                height: 52,
                 decoration: BoxDecoration(
                   color: catColor,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
               const SizedBox(width: 12),
-              // Product info
+
+              // Main content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Name row + badge
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(
@@ -60,106 +76,106 @@ class ProductCard extends StatelessWidget {
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isLow)
+                        if (isLow || isOut) ...[
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                                horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
-                              color: product.isOut
-                                  ? Colors.red.shade100
-                                  : Colors.orange.shade100,
-                              borderRadius: BorderRadius.circular(8),
+                              color: statusColor.withAlpha(20),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: statusColor.withAlpha(80), width: 1),
                             ),
                             child: Text(
-                              product.isOut ? 'Agotado' : 'Bajo',
+                              isOut ? 'Agotado' : 'Bajo',
                               style: TextStyle(
                                 fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: product.isOut
-                                    ? Colors.red.shade700
-                                    : Colors.orange.shade700,
+                                fontWeight: FontWeight.w700,
+                                color: statusColor,
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          product.categoryName ?? '',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: catColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (product.subcategoryName != null) ...[
-                          Text(
-                            ' · ',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey),
-                          ),
-                          Text(
-                            product.subcategoryName!,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey),
                           ),
                         ],
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    // Quantity progress
+
+                    const SizedBox(height: 3),
+
+                    // Category text
                     Row(
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${product.currentQuantity.toStringAsFixed(product.currentQuantity == product.currentQuantity.roundToDouble() ? 0 : 1)} / ${product.quantityToMaintain.toStringAsFixed(product.quantityToMaintain == product.quantityToMaintain.roundToDouble() ? 0 : 1)} ${product.unit}',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: isLow
-                                          ? Colors.orange.shade700
-                                          : Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  if (product.lastPrice > 0)
-                                    Text(
-                                      '\$${product.lastPrice.toStringAsFixed(0)}',
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color: Colors.grey.shade500,
-                                      ),
-                                    ),
-                                ],
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: catColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            [
+                              product.categoryName,
+                              product.subcategoryName,
+                            ].where((e) => e != null).join(' · '),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurface.withAlpha(140),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Progress + quantity row
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${_fmt(product.currentQuantity)} / ${_fmt(product.quantityToMaintain)} ${product.unit}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: isLow
+                                      ? statusColor
+                                      : colorScheme.onSurface.withAlpha(150),
+                                  fontWeight: isLow
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: product.quantityToMaintain > 0
-                                      ? (product.currentQuantity /
-                                              product.quantityToMaintain)
-                                          .clamp(0.0, 1.0)
-                                      : 0,
-                                  backgroundColor: Colors.grey.shade200,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    product.isOut
-                                        ? Colors.red
-                                        : isLow
-                                            ? Colors.orange
-                                            : Colors.green,
-                                  ),
-                                  minHeight: 6,
+                            ),
+                            if (product.lastPrice > 0)
+                              Text(
+                                '\$${product.lastPrice.toStringAsFixed(0)}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withAlpha(120),
                                 ),
                               ),
-                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor:
+                                colorScheme.onSurface.withAlpha(20),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              statusColor,
+                            ),
+                            minHeight: 5,
                           ),
                         ),
                       ],
@@ -167,10 +183,11 @@ class ProductCard extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(width: 8),
               Icon(
-                Icons.chevron_right,
-                color: Colors.grey.shade400,
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurface.withAlpha(80),
                 size: 20,
               ),
             ],
@@ -179,4 +196,7 @@ class ProductCard extends StatelessWidget {
       ),
     );
   }
+
+  String _fmt(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 }

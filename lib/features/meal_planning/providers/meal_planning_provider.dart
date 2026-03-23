@@ -127,8 +127,6 @@ class MealPlansNotifier extends AsyncNotifier<List<MealPlan>> {
 final mealPlansForDateProvider = Provider<AsyncValue<List<MealPlan>>>((ref) {
   final plans = ref.watch(mealPlansProvider);
   final selected = ref.watch(selectedDateProvider);
-  final dateStr =
-      '${selected.year}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
 
   return plans.whenData(
     (list) => list

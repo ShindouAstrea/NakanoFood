@@ -5,6 +5,9 @@ import '../providers/shopping_provider.dart';
 import '../models/shopping_session.dart';
 import '../../../shared/widgets/empty_state.dart';
 
+String _fmtN(double v) =>
+    v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+
 class ShoppingHistoryScreen extends ConsumerWidget {
   const ShoppingHistoryScreen({super.key});
 
@@ -126,7 +129,7 @@ class _SessionItemTile extends StatelessWidget {
                 style: const TextStyle(fontSize: 13)),
           ),
           Text(
-            '$qty ${item.unit}',
+            '${_fmtN(qty)} ${item.unit}',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           const SizedBox(width: 12),

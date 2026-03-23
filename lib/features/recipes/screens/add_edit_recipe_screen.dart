@@ -243,7 +243,7 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
             const SizedBox(height: 16),
 
             // Basic info
-            _SectionTitle(title: 'Información General'),
+            const _SectionTitle(title: 'Información General'),
             const SizedBox(height: 8),
             TextFormField(
               controller: _nameCtrl,
@@ -322,7 +322,7 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
             const SizedBox(height: 16),
 
             // Ingredients
-            _SectionTitle(title: 'Ingredientes'),
+            const _SectionTitle(title: 'Ingredientes'),
             const SizedBox(height: 8),
             ..._ingredients.mapIndexed((i, ing) => _IngredientRow(
                   entry: ing,
@@ -343,7 +343,7 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
             const SizedBox(height: 16),
 
             // Steps
-            _SectionTitle(title: 'Pasos de Preparación'),
+            const _SectionTitle(title: 'Pasos de Preparación'),
             const SizedBox(height: 8),
             ..._stepControllers.mapIndexed(
                 (i, ctrl) => _StepRow(
@@ -377,7 +377,7 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
 
             // Additional images
             if (_additionalImages.isNotEmpty) ...[
-              _SectionTitle(title: 'Fotos Adicionales'),
+              const _SectionTitle(title: 'Fotos Adicionales'),
               const SizedBox(height: 8),
               SizedBox(
                 height: 80,
@@ -529,7 +529,7 @@ class _IngredientRowState extends ConsumerState<_IngredientRow> {
           SizedBox(
             width: 70,
             child: DropdownButtonFormField<String>(
-              value: widget.entry.unit,
+              initialValue: widget.entry.unit,
               isDense: true,
               decoration: const InputDecoration(
                 isDense: true,

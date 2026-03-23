@@ -76,9 +76,11 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
         productName: product.name,
         plannedQuantity: neededQty > 0 ? neededQty : product.quantityToMaintain,
         unit: product.unit,
-        plannedPrice: product.lastPrice,
+        plannedPrice: product.pricePerUnit,
         categoryId: product.categoryId,
         categoryName: catName,
+        subcategoryId: product.subcategoryId,
+        subcategoryName: product.subcategoryName,
         lastPlace: product.lastPlace,
       );
       items.add(item);
@@ -147,6 +149,7 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
           {
             'current_quantity': product.currentQuantity + qty,
             'last_price': price > 0 ? price : product.lastPrice,
+            if (price > 0) 'price_ref_qty': 1.0,
             'updated_at': DateTime.now().toIso8601String(),
           },
           where: 'id = ?',
@@ -226,33 +229,43 @@ class SessionsHistoryNotifier extends AsyncNotifier<List<ShoppingSession>> {
   }
 }
 
-// Shopping items organized by area (category + place)
-final shoppingItemsByAreaProvider =
-    Provider<AsyncValue<Map<String, List<ShoppingItem>>>>((ref) {
+// Shopping items grouped by category → subcategory → items
+// Map<categoryName, Map<subcategoryName, List<ShoppingItem>>>
+// Subcategory key 'Sin subcategoría' is used for items without one.
+final shoppingItemsByCategoryProvider =
+    Provider<AsyncValue<Map<String, Map<String, List<ShoppingItem>>>>>((ref) {
   final sessionAsync = ref.watch(activeSessionProvider);
   return sessionAsync.whenData((session) {
     if (session == null) return {};
     final items = session.items;
 
-    // Sort: low stock items first, then by category/area
-    final lowItems = items.where((i) => !i.isPurchased).toList()
-      ..sort((a, b) {
-        final aKey = '${a.lastPlace ?? a.categoryName ?? "Otros"}';
-        final bKey = '${b.lastPlace ?? b.categoryName ?? "Otros"}';
-        return aKey.compareTo(bKey);
-      });
-    final purchasedItems =
-        items.where((i) => i.isPurchased).toList();
+    // pending items first (alphabetically by name), then purchased
+    final pending = items.where((i) => !i.isPurchased).toList()
+      ..sort((a, b) => a.productName.compareTo(b.productName));
+    final purchased = items.where((i) => i.isPurchased).toList()
+      ..sort((a, b) => a.productName.compareTo(b.productName));
+    final sorted = [...pending, ...purchased];
 
-    final allItems = [...lowItems, ...purchasedItems];
-
-    final grouped = <String, List<ShoppingItem>>{};
-    for (final item in allItems) {
-      final area = item.lastPlace?.isNotEmpty == true
-          ? item.lastPlace!
-          : (item.categoryName ?? 'Sin categoría');
-      grouped.putIfAbsent(area, () => []).add(item);
+    final grouped = <String, Map<String, List<ShoppingItem>>>{};
+    for (final item in sorted) {
+      final cat = item.categoryName ?? 'Sin categoría';
+      final sub = (item.subcategoryName?.isNotEmpty == true)
+          ? item.subcategoryName!
+          : 'Sin subcategoría';
+      grouped.putIfAbsent(cat, () => {})[sub] ??= [];
+      grouped[cat]![sub]!.add(item);
     }
-    return grouped;
+
+    // Sort categories and subcategories alphabetically
+    final sortedGrouped = Map.fromEntries(
+      grouped.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    for (final cat in sortedGrouped.keys) {
+      sortedGrouped[cat] = Map.fromEntries(
+        sortedGrouped[cat]!.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key)),
+      );
+    }
+    return sortedGrouped;
   });
 });

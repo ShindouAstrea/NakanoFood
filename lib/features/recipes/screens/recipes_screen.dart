@@ -14,7 +14,7 @@ class RecipesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final recipesAsync = ref.watch(filteredRecipesProvider);
     final typeFilter = ref.watch(recipeTypeFilterProvider);
-    final search = ref.watch(recipeSearchProvider);
+    ref.watch(recipeSearchProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -24,12 +24,11 @@ class RecipesScreen extends ConsumerWidget {
         children: [
           // Search
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: TextField(
               decoration: const InputDecoration(
                 hintText: 'Buscar recetas...',
-                prefixIcon: Icon(Icons.search),
-                isDense: true,
+                prefixIcon: Icon(Icons.search_rounded),
               ),
               onChanged: (v) =>
                   ref.read(recipeSearchProvider.notifier).state = v,
@@ -37,11 +36,10 @@ class RecipesScreen extends ConsumerWidget {
           ),
           // Type filter
           SizedBox(
-            height: 44,
+            height: 40,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
@@ -109,6 +107,7 @@ class RecipesScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_recipes',
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddEditRecipeScreen()),

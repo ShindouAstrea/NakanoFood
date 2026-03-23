@@ -20,15 +20,6 @@ class _MealPlanningScreenState
     extends ConsumerState<MealPlanningScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
-  Color _parseColor(String? hex) {
-    if (hex == null) return Colors.grey;
-    try {
-      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      return Colors.grey;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final selectedDate = ref.watch(selectedDateProvider);
@@ -154,6 +145,7 @@ class _MealPlanningScreenState
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_meal_planning',
         onPressed: () => _addMeal(context),
         child: const Icon(Icons.add),
       ),
@@ -194,14 +186,6 @@ class _MealPlanningScreenState
     }
   }
 
-  Color _parseColor(String? hex) {
-    if (hex == null) return Colors.grey;
-    try {
-      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      return Colors.grey;
-    }
-  }
 }
 
 class _MealCard extends StatelessWidget {

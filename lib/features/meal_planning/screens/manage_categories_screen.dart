@@ -57,6 +57,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_manage_categories',
         onPressed: () => _showCategoryDialog(context, ref),
         child: const Icon(Icons.add),
       ),
@@ -226,7 +227,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   }
 
   String _colorToHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+    return '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
   }
 
   @override

@@ -220,7 +220,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
 
                 // Description
                 if (recipe.description != null) ...[
-                  _SectionHeader(title: 'Descripción'),
+                  const _SectionHeader(title: 'Descripción'),
                   Text(recipe.description!,
                       style: theme.textTheme.bodyMedium),
                   const SizedBox(height: 16),
@@ -249,7 +249,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
 
                 // Notes
                 if (recipe.notes != null) ...[
-                  _SectionHeader(title: 'Notas'),
+                  const _SectionHeader(title: 'Notas'),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -280,7 +280,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
 
                 // Additional images
                 if (recipe.imagePaths.length > 1) ...[
-                  _SectionHeader(title: 'Fotos'),
+                  const _SectionHeader(title: 'Fotos'),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 120,
