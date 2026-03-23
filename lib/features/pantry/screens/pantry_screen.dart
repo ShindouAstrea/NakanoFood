@@ -8,6 +8,7 @@ import 'product_detail_screen.dart';
 import 'shopping_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/skeletons/product_card_skeleton.dart';
+import '../../../shared/widgets/ios_install_banner.dart';
 
 class PantryScreen extends ConsumerStatefulWidget {
   const PantryScreen({super.key});
@@ -119,6 +120,8 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         behavior: HitTestBehavior.translucent,
         child: Column(
           children: [
+            // iOS install hint (web only)
+            const IosInstallBanner(),
             // Search bar
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
