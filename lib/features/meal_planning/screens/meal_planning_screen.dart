@@ -13,12 +13,10 @@ class MealPlanningScreen extends ConsumerStatefulWidget {
   const MealPlanningScreen({super.key});
 
   @override
-  ConsumerState<MealPlanningScreen> createState() =>
-      _MealPlanningScreenState();
+  ConsumerState<MealPlanningScreen> createState() => _MealPlanningScreenState();
 }
 
-class _MealPlanningScreenState
-    extends ConsumerState<MealPlanningScreen> {
+class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
   @override
@@ -26,6 +24,11 @@ class _MealPlanningScreenState
     final selectedDate = ref.watch(selectedDateProvider);
     final datesWithPlansAsync = ref.watch(datesWithPlansProvider);
     final mealsForDayAsync = ref.watch(mealPlansForDateProvider);
+    final Map<CalendarFormat, String> calendarFormat = {
+      CalendarFormat.month: "Mes",
+      CalendarFormat.twoWeeks: "2 Semanas",
+      CalendarFormat.week: "Semana"
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -36,8 +39,7 @@ class _MealPlanningScreenState
             tooltip: 'Gestionar categorías',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const ManageCategoriesScreen()),
+              MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()),
             ).then((_) => ref.invalidate(mealCategoriesProvider)),
           ),
         ],
@@ -48,12 +50,14 @@ class _MealPlanningScreenState
           Card(
             margin: const EdgeInsets.all(8),
             child: TableCalendar(
+              locale: 'es_Es',
+              startingDayOfWeek: StartingDayOfWeek.monday,
               firstDay: DateTime.utc(2020, 1, 1),
               lastDay: DateTime.utc(2030, 12, 31),
               focusedDay: selectedDate,
               calendarFormat: _calendarFormat,
-              selectedDayPredicate: (day) =>
-                  isSameDay(selectedDate, day),
+              availableCalendarFormats: calendarFormat,
+              selectedDayPredicate: (day) => isSameDay(selectedDate, day),
               onDaySelected: (selected, focused) {
                 ref.read(selectedDateProvider.notifier).state =
                     DateTime(selected.year, selected.month, selected.day);
@@ -71,10 +75,7 @@ class _MealPlanningScreenState
                   shape: BoxShape.circle,
                 ),
                 todayDecoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withAlpha(80),
+                  color: Theme.of(context).colorScheme.primary.withAlpha(80),
                   shape: BoxShape.circle,
                 ),
                 markerDecoration: BoxDecoration(
@@ -90,8 +91,7 @@ class _MealPlanningScreenState
           ),
           // Day header
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -130,8 +130,7 @@ class _MealPlanningScreenState
                     onEdit: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            AddEditMealScreen(meal: meals[i]),
+                        builder: (_) => AddEditMealScreen(meal: meals[i]),
                       ),
                     ).then((_) => ref.invalidate(mealPlansProvider)),
                     onDelete: () => _deleteMeal(context, ref, meals[i]),
@@ -186,7 +185,6 @@ class _MealPlanningScreenState
       await ref.read(mealPlansProvider.notifier).deleteMealPlan(meal.id);
     }
   }
-
 }
 
 class _MealCard extends StatelessWidget {
@@ -252,8 +250,8 @@ class _MealCard extends StatelessWidget {
                           item.title,
                           style: TextStyle(
                               fontSize: 13,
-                              color: theme.colorScheme.onSurface
-                                  .withAlpha(180)),
+                              color:
+                                  theme.colorScheme.onSurface.withAlpha(180)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -265,8 +263,7 @@ class _MealCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 meal.notes!,
-                style: TextStyle(
-                    fontSize: 12, color: Colors.grey.shade500),
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
