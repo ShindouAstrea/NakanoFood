@@ -168,7 +168,8 @@ class _MealPlanningScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar comida'),
-        content: Text('¿Eliminar "${meal.title}"?'),
+        content: Text(
+            '¿Eliminar la comida de "${meal.categoryName ?? 'esta categoría'}"?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -225,27 +226,43 @@ class _MealCard extends StatelessWidget {
           child: Icon(Icons.restaurant, color: catColor, size: 22),
         ),
         title: Text(
-          meal.title,
-          style: theme.textTheme.titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600),
+          meal.categoryName ?? 'Sin categoría',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: catColor,
+          ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              meal.categoryName ?? 'Sin categoría',
-              style: TextStyle(
-                  color: catColor,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 12),
-            ),
-            if (meal.recipeName != null)
-              Text(
-                'Receta: ${meal.recipeName}',
-                style: TextStyle(
-                    fontSize: 12, color: Colors.grey.shade500),
-              ),
-            if (meal.notes != null)
+            ...meal.items.map((item) => Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    children: [
+                      Icon(
+                        item.recipeId != null
+                            ? Icons.menu_book_outlined
+                            : Icons.circle,
+                        size: item.recipeId != null ? 12 : 5,
+                        color: theme.colorScheme.onSurface.withAlpha(120),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: theme.colorScheme.onSurface
+                                  .withAlpha(180)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+            if (meal.notes != null) ...[
+              const SizedBox(height: 4),
               Text(
                 meal.notes!,
                 style: TextStyle(
@@ -253,9 +270,10 @@ class _MealCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+            ],
           ],
         ),
-        isThreeLine: true,
+        isThreeLine: meal.items.length > 1 || meal.notes != null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

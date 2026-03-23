@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/recipe.dart';
+import '../../../shared/widgets/recipe_image.dart';
 
 class RecipeCard extends StatelessWidget {
   final Recipe recipe;
@@ -18,19 +18,18 @@ class RecipeCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Image
             SizedBox(
               width: 100,
-              child: recipe.mainImagePath != null
-                  ? Image.file(
-                      File(recipe.mainImagePath!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(colorScheme),
-                    )
-                  : _placeholder(colorScheme),
+              child: RecipeImage(
+                imagePath: recipe.mainImagePath,
+                fit: BoxFit.cover,
+                placeholderBuilder: _placeholder,
+              ),
             ),
 
             // Info
@@ -101,6 +100,7 @@ class RecipeCard extends StatelessWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

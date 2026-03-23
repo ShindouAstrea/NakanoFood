@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/recipe_provider.dart';
@@ -55,7 +56,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                 shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
               ),
             ),
-            background: recipe.mainImagePath != null
+            background: (!kIsWeb && recipe.mainImagePath != null)
                 ? Stack(
                     fit: StackFit.expand,
                     children: [
@@ -292,11 +293,12 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          image: DecorationImage(
-                            image:
-                                FileImage(File(recipe.imagePaths[i])),
-                            fit: BoxFit.cover,
-                          ),
+                          image: kIsWeb
+                              ? null
+                              : DecorationImage(
+                                  image: FileImage(File(recipe.imagePaths[i])),
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                       ),
                     ),
