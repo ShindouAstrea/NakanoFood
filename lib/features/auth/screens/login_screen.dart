@@ -24,6 +24,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  String _friendlyError(String raw) {
+    final r = raw.toLowerCase();
+    if (r.contains('invalid login credentials') || r.contains('401')) {
+      return 'Correo o contraseña incorrectos.';
+    }
+    if (r.contains('email not confirmed')) {
+      return 'Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.';
+    }
+    if (r.contains('user already registered')) {
+      return 'Ya existe una cuenta con ese correo. Intenta iniciar sesión.';
+    }
+    if (r.contains('password should be at least')) {
+      return 'La contraseña debe tener al menos 6 caracteres.';
+    }
+    if (r.contains('unable to validate email address')) {
+      return 'El correo electrónico no es válido.';
+    }
+    if (r.contains('networkerror') || r.contains('failed to fetch')) {
+      return 'Sin conexión a internet. Verifica tu red.';
+    }
+    return 'Error al autenticar. Inténtalo de nuevo.';
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final notifier = ref.read(authNotifierProvider.notifier);
@@ -39,8 +62,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.read(authNotifierProvider);
     if (authState.hasError && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(authState.error.toString()),
+        content: Text(_friendlyError(authState.error.toString())),
         backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
       ));
       return;
     }
