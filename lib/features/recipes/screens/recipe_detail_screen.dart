@@ -6,6 +6,7 @@ import '../providers/recipe_provider.dart';
 import '../models/recipe.dart';
 import 'add_edit_recipe_screen.dart';
 
+
 class RecipeDetailScreen extends ConsumerStatefulWidget {
   final String recipeId;
 
