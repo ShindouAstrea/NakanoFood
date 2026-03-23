@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -14,11 +15,14 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
+    // On web, getDatabasesPath() is not available — just use the filename.
+    // sqflite_common_ffi_web persists it in IndexedDB automatically.
+    final path = kIsWeb
+        ? filePath
+        : join(await getDatabasesPath(), filePath);
     return await openDatabase(
       path,
-      version: 4,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -48,6 +52,89 @@ class DatabaseHelper {
         )
       ''');
     }
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS meal_plan_items (
+          id TEXT PRIMARY KEY,
+          meal_plan_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          recipe_id TEXT,
+          sort_order INTEGER DEFAULT 0,
+          FOREIGN KEY (meal_plan_id) REFERENCES meal_plans(id) ON DELETE CASCADE,
+          FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
+        )
+      ''');
+      // Migrate existing meal plans: turn title + recipe_id into items
+      final plans = await db.query('meal_plans');
+      for (final plan in plans) {
+        final title = plan['title'] as String?;
+        if (title != null && title.isNotEmpty) {
+          final itemId =
+              'mpi_${(plan['id'] as String).replaceAll('-', '').substring(0, 8)}';
+          await db.insert('meal_plan_items', {
+            'id': itemId,
+            'meal_plan_id': plan['id'],
+            'title': title,
+            'recipe_id': plan['recipe_id'],
+            'sort_order': 0,
+          });
+        }
+      }
+    }
+    if (oldVersion < 6) {
+      // Add sync columns to all root tables
+      const syncTables = [
+        'product_categories',
+        'product_subcategories',
+        'products',
+        'nutritional_values',
+        'product_price_history',
+        'recipes',
+        'recipe_ingredients',
+        'recipe_steps',
+        'recipe_images',
+        'meal_categories',
+        'meal_category_days',
+        'meal_plans',
+        'meal_plan_items',
+        'shopping_sessions',
+        'shopping_items',
+      ];
+      for (final table in syncTables) {
+        try {
+          await db.execute(
+              'ALTER TABLE $table ADD COLUMN user_id TEXT');
+        } catch (_) {}
+        try {
+          await db.execute(
+              'ALTER TABLE $table ADD COLUMN synced_at TEXT');
+        } catch (_) {}
+      }
+      // Add updated_at to tables that don't have it
+      const needsUpdatedAt = [
+        'product_categories',
+        'product_subcategories',
+        'meal_categories',
+        'meal_plans',
+        'meal_plan_items',
+        'shopping_sessions',
+        'shopping_items',
+      ];
+      for (final table in needsUpdatedAt) {
+        try {
+          await db.execute(
+              'ALTER TABLE $table ADD COLUMN updated_at TEXT');
+        } catch (_) {}
+      }
+      // Set updated_at to now for existing rows
+      final now = DateTime.now().toIso8601String();
+      for (final table in needsUpdatedAt) {
+        try {
+          await db
+              .execute('UPDATE $table SET updated_at = ? WHERE updated_at IS NULL', [now]);
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -57,7 +144,10 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         is_custom INTEGER DEFAULT 0,
         icon TEXT,
-        color TEXT
+        color TEXT,
+        user_id TEXT,
+        updated_at TEXT,
+        synced_at TEXT
       )
     ''');
 
@@ -66,6 +156,9 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         category_id TEXT NOT NULL,
         name TEXT NOT NULL,
+        user_id TEXT,
+        updated_at TEXT,
+        synced_at TEXT,
         FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE CASCADE
       )
     ''');
@@ -85,6 +178,8 @@ class DatabaseHelper {
         notes TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (category_id) REFERENCES product_categories(id),
         FOREIGN KEY (subcategory_id) REFERENCES product_subcategories(id)
       )
@@ -105,6 +200,8 @@ class DatabaseHelper {
         trans_fats REAL,
         proteins REAL,
         sodium REAL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     ''');
@@ -116,7 +213,10 @@ class DatabaseHelper {
         completed_at TEXT,
         total_cost REAL DEFAULT 0,
         status TEXT DEFAULT 'active',
-        notes TEXT
+        notes TEXT,
+        updated_at TEXT,
+        user_id TEXT,
+        synced_at TEXT
       )
     ''');
 
@@ -137,6 +237,9 @@ class DatabaseHelper {
         subcategory_id TEXT,
         subcategory_name TEXT,
         last_place TEXT,
+        updated_at TEXT,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (session_id) REFERENCES shopping_sessions(id) ON DELETE CASCADE
       )
     ''');
@@ -154,7 +257,9 @@ class DatabaseHelper {
         estimated_cost REAL DEFAULT 0,
         notes TEXT,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        user_id TEXT,
+        synced_at TEXT
       )
     ''');
 
@@ -166,6 +271,8 @@ class DatabaseHelper {
         product_name TEXT NOT NULL,
         quantity REAL NOT NULL,
         unit TEXT NOT NULL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
       )
     ''');
@@ -176,6 +283,8 @@ class DatabaseHelper {
         recipe_id TEXT NOT NULL,
         step_number INTEGER NOT NULL,
         description TEXT NOT NULL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
       )
     ''');
@@ -185,6 +294,8 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         recipe_id TEXT NOT NULL,
         image_path TEXT NOT NULL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
       )
     ''');
@@ -197,7 +308,10 @@ class DatabaseHelper {
         color TEXT DEFAULT '#2E7D32',
         notification_enabled INTEGER DEFAULT 0,
         notification_minutes_before INTEGER DEFAULT 15,
-        is_custom INTEGER DEFAULT 0
+        is_custom INTEGER DEFAULT 0,
+        updated_at TEXT,
+        user_id TEXT,
+        synced_at TEXT
       )
     ''');
 
@@ -206,6 +320,8 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         category_id TEXT NOT NULL,
         day_of_week INTEGER NOT NULL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (category_id) REFERENCES meal_categories(id) ON DELETE CASCADE
       )
     ''');
@@ -215,11 +331,26 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         date TEXT NOT NULL,
         category_id TEXT NOT NULL,
-        title TEXT NOT NULL,
         notes TEXT,
+        updated_at TEXT,
+        user_id TEXT,
+        synced_at TEXT,
+        FOREIGN KEY (category_id) REFERENCES meal_categories(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE meal_plan_items (
+        id TEXT PRIMARY KEY,
+        meal_plan_id TEXT NOT NULL,
+        title TEXT NOT NULL,
         recipe_id TEXT,
-        FOREIGN KEY (category_id) REFERENCES meal_categories(id),
-        FOREIGN KEY (recipe_id) REFERENCES recipes(id)
+        sort_order INTEGER DEFAULT 0,
+        updated_at TEXT,
+        user_id TEXT,
+        synced_at TEXT,
+        FOREIGN KEY (meal_plan_id) REFERENCES meal_plans(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
       )
     ''');
 
@@ -231,6 +362,8 @@ class DatabaseHelper {
         price_ref_qty REAL DEFAULT 1.0,
         unit TEXT NOT NULL,
         purchased_at TEXT NOT NULL,
+        user_id TEXT,
+        synced_at TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     ''');

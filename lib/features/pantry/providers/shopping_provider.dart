@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/database/db_write_helper.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/sync_service.dart';
 import '../models/shopping_session.dart';
 import '../models/product.dart';
 import 'pantry_provider.dart';
@@ -16,6 +19,8 @@ final activeSessionProvider =
 class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
   @override
   Future<ShoppingSession?> build() => _loadActiveSession();
+
+  String? get _uid => ref.read(currentUserIdProvider);
 
   Future<ShoppingSession?> _loadActiveSession() async {
     final db = await DatabaseHelper.instance.database;
@@ -53,7 +58,7 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
       createdAt: DateTime.now(),
       status: ShoppingStatus.active,
     );
-    await db.insert('shopping_sessions', session.toMap());
+    await db.insert('shopping_sessions', withSync(session.toMap(), _uid));
 
     // Add all products as shopping items (prioritize low stock)
     final items = <ShoppingItem>[];
@@ -84,11 +89,12 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
         lastPlace: product.lastPlace,
       );
       items.add(item);
-      await db.insert('shopping_items', item.toMap());
+      await db.insert('shopping_items', withSync(item.toMap(), _uid));
     }
 
     final fullSession = session.copyWith(items: items);
     state = AsyncValue.data(fullSession);
+    ref.read(syncServiceProvider).queueSync();
     return fullSession;
   }
 
@@ -104,6 +110,8 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
         'actual_quantity': actualQuantity,
         'actual_price': actualPrice,
         'is_purchased': 1,
+        'updated_at': DateTime.now().toIso8601String(),
+        'synced_at': null,
       },
       where: 'id = ?',
       whereArgs: [itemId],
@@ -115,7 +123,11 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
     final db = await DatabaseHelper.instance.database;
     await db.update(
       'shopping_items',
-      {'is_purchased': 0},
+      {
+        'is_purchased': 0,
+        'updated_at': DateTime.now().toIso8601String(),
+        'synced_at': null,
+      },
       where: 'id = ?',
       whereArgs: [itemId],
     );
@@ -144,30 +156,30 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
       );
       if (prodMaps.isNotEmpty) {
         final product = Product.fromMap(prodMaps.first);
+        final now = DateTime.now().toIso8601String();
         await db.update(
           'products',
           {
             'current_quantity': product.currentQuantity + qty,
-            // price (actualPrice) is per-unit; scale back to the product's
-            // reference quantity so the stored format stays as "$5000/250g"
             'last_price': price > 0
                 ? price * product.priceRefQty
                 : product.lastPrice,
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': now,
+            'synced_at': null,
           },
           where: 'id = ?',
           whereArgs: [item.productId],
         );
 
         if (price > 0) {
-          await db.insert('product_price_history', {
+          await db.insert('product_price_history', withSync({
             'id': _uuid.v4(),
             'product_id': item.productId,
             'price': price * product.priceRefQty,
             'price_ref_qty': product.priceRefQty,
             'unit': product.unit,
-            'purchased_at': DateTime.now().toIso8601String(),
-          });
+            'purchased_at': now,
+          }, _uid, setUpdatedAt: false));
 
           // Keep only the 10 most recent entries per product
           final history = await db.query(
@@ -196,6 +208,8 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
         'status': 'completed',
         'completed_at': DateTime.now().toIso8601String(),
         'total_cost': totalCost,
+        'updated_at': DateTime.now().toIso8601String(),
+        'synced_at': null,
       },
       where: 'id = ?',
       whereArgs: [session.id],
@@ -204,6 +218,7 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
     state = const AsyncValue.data(null);
     ref.invalidate(sessionsHistoryProvider);
     ref.invalidate(productsProvider);
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> cancelSession() async {
@@ -216,6 +231,8 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
       {
         'status': 'cancelled',
         'completed_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+        'synced_at': null,
       },
       where: 'id = ?',
       whereArgs: [session.id],
@@ -223,6 +240,7 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
 
     state = const AsyncValue.data(null);
     ref.invalidate(sessionsHistoryProvider);
+    ref.read(syncServiceProvider).queueSync();
   }
 }
 

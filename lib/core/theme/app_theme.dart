@@ -83,11 +83,15 @@ class AppTheme {
             const TextStyle(color: Color(0xFFAAAAAA), fontSize: 14),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFFEEF2EF),
-        selectedColor: colorScheme.primary.withAlpha(50),
-        labelStyle:
-            const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-        side: BorderSide.none,
+        backgroundColor: const Color(0xFFE8EDE9),
+        selectedColor: colorScheme.primary.withAlpha(55),
+        labelStyle: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: colorScheme.onSurface,
+        ),
+        checkmarkColor: colorScheme.primary,
+        side: BorderSide(color: colorScheme.onSurface.withAlpha(40)),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -221,12 +225,14 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: darkCard,
-        selectedColor: darkAccent.withAlpha(60),
+        selectedColor: darkAccent.withAlpha(70),
         labelStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.white70),
-        side: BorderSide.none,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+        checkmarkColor: darkAccent,
+        side: BorderSide(color: Colors.white.withAlpha(30)),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20)),

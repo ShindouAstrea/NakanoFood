@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -7,6 +8,8 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   static Future<void> initialize() async {
+    if (kIsWeb) return;
+
     tz.initializeTimeZones();
 
     const androidSettings =
@@ -24,6 +27,8 @@ class NotificationService {
   }
 
   static Future<void> requestPermissions() async {
+    if (kIsWeb) return;
+
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     await android?.requestNotificationsPermission();
@@ -44,6 +49,8 @@ class NotificationService {
     required DateTime scheduledTime,
     required int minutesBefore,
   }) async {
+    if (kIsWeb) return;
+
     final notifyTime =
         scheduledTime.subtract(Duration(minutes: minutesBefore));
     if (notifyTime.isBefore(DateTime.now())) return;
@@ -75,10 +82,12 @@ class NotificationService {
   }
 
   static Future<void> cancelNotification(int id) async {
+    if (kIsWeb) return;
     await _plugin.cancel(id);
   }
 
   static Future<void> cancelAllNotifications() async {
+    if (kIsWeb) return;
     await _plugin.cancelAll();
   }
 }

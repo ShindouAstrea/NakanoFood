@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/supabase_config.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/sync_service.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../auth/screens/login_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -11,6 +15,9 @@ class ProfileScreen extends ConsumerWidget {
     final currentAccent = ref.watch(accentColorProvider);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final user = ref.watch(currentUserProvider);
+    final syncStatus = ref.watch(syncStatusProvider);
+    final supabaseConfigured = SupabaseConfig.isConfigured;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Perfil')),
@@ -40,15 +47,19 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Invitado',
+                  user?.email ?? 'Sin cuenta',
                   style: theme.textTheme.titleLarge
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Inicia sesión para sincronizar tus datos',
+                  user != null
+                      ? 'Sincronización activa'
+                      : 'Inicia sesión para sincronizar tus datos',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface.withAlpha(120),
+                    color: user != null
+                        ? colorScheme.primary
+                        : colorScheme.onSurface.withAlpha(120),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -58,68 +69,98 @@ class ProfileScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
-          // ── Login card (próximamente) ────────────────────────────────────
+          // ── Cuenta / Sync ────────────────────────────────────────────────
+          const _SectionLabel(label: 'Cuenta'),
+          const SizedBox(height: 8),
           _SectionCard(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: colorScheme.tertiary.withAlpha(30),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Próximamente',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.tertiary,
-                          ),
-                        ),
+              if (!supabaseConfigured)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Configura las credenciales de Supabase en\nlib/core/config/supabase_config.dart para activar la sincronización.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                )
+              else if (user == null)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const LoginScreen()),
                       ),
+                      icon: const Icon(Icons.login_rounded),
+                      label: const Text('Iniciar sesión / Registrarse'),
                     ),
-                    const SizedBox(height: 12),
-                    Icon(Icons.cloud_sync_outlined,
-                        size: 40,
-                        color: colorScheme.onSurface.withAlpha(60)),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Sincronización en la nube',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                )
+              else ...[
+                ListTile(
+                  leading: Icon(Icons.cloud_done_outlined,
+                      color: colorScheme.primary),
+                  title: const Text('Sincronizar ahora'),
+                  subtitle: Text(
+                    syncStatus == SyncStatus.syncing
+                        ? 'Sincronizando...'
+                        : syncStatus == SyncStatus.error
+                            ? 'Error al sincronizar'
+                            : 'Datos al día',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: syncStatus == SyncStatus.error
+                          ? Colors.red
+                          : colorScheme.onSurface.withAlpha(120),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Accede a tus recetas y despensa desde cualquier dispositivo',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface.withAlpha(120),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: null,
-                        icon: const Icon(Icons.login_rounded),
-                        label: const Text('Iniciar sesión'),
-                        style: ElevatedButton.styleFrom(
-                          disabledBackgroundColor:
-                              colorScheme.onSurface.withAlpha(20),
-                          disabledForegroundColor:
-                              colorScheme.onSurface.withAlpha(80),
+                  ),
+                  trailing: syncStatus == SyncStatus.syncing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.sync_rounded),
+                          onPressed: () =>
+                              ref.read(syncServiceProvider).fullUpload(),
                         ),
-                      ),
-                    ),
-                  ],
                 ),
-              ),
+                const Divider(height: 1, indent: 52),
+                ListTile(
+                  leading: Icon(Icons.download_outlined,
+                      color: colorScheme.primary),
+                  title: const Text('Restaurar desde la nube'),
+                  subtitle: const Text(
+                    'Descarga todos los datos de tu cuenta',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  onTap: () async {
+                    await ref.read(syncServiceProvider).fullDownload();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Datos restaurados correctamente')),
+                      );
+                    }
+                  },
+                ),
+                const Divider(height: 1, indent: 52),
+                ListTile(
+                  leading:
+                      const Icon(Icons.logout_rounded, color: Colors.red),
+                  title: const Text('Cerrar sesión',
+                      style: TextStyle(color: Colors.red)),
+                  onTap: () async {
+                    await ref
+                        .read(authNotifierProvider.notifier)
+                        .signOut();
+                  },
+                ),
+              ],
             ],
           ),
 

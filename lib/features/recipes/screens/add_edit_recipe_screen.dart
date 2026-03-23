@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -94,12 +95,14 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
   }
 
   Future<void> _pickMainImage() async {
+    if (kIsWeb) return;
     final picker = ImagePicker();
     final img = await picker.pickImage(source: ImageSource.gallery);
     if (img != null) setState(() => _mainImagePath = img.path);
   }
 
   Future<void> _pickAdditionalImage() async {
+    if (kIsWeb) return;
     final picker = ImagePicker();
     final img = await picker.pickImage(source: ImageSource.gallery);
     if (img != null) setState(() => _additionalImages.add(img.path));
@@ -207,7 +210,7 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
                       color: Colors.grey.shade300, width: 1.5),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: _mainImagePath != null
+                child: (!kIsWeb && _mainImagePath != null)
                     ? Stack(
                         fit: StackFit.expand,
                         children: [
@@ -300,24 +303,35 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
                   child: TextFormField(
                     controller: _prepTimeCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'Prep. (min)',
+                      labelText: 'Preparación',
+                      suffixText: 'min',
                       prefixIcon: Icon(Icons.timer_outlined),
                     ),
                     keyboardType: TextInputType.number,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _cookTimeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Cocción (min)',
-                      prefixIcon: Icon(Icons.local_fire_department_outlined),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
               ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _cookTimeCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Cocción',
+                        suffixText: 'min',
+                        prefixIcon:
+                            Icon(Icons.local_fire_department_outlined),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -407,11 +421,13 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            image: DecorationImage(
-                              image: FileImage(
-                                  File(_additionalImages[i])),
-                              fit: BoxFit.cover,
-                            ),
+                            image: kIsWeb
+                                ? null
+                                : DecorationImage(
+                                    image: FileImage(
+                                        File(_additionalImages[i])),
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                         ),
                         Positioned(
@@ -482,72 +498,105 @@ class _IngredientRow extends ConsumerStatefulWidget {
 class _IngredientRowState extends ConsumerState<_IngredientRow> {
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.onSurface.withAlpha(6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.onSurface.withAlpha(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withAlpha(30),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '${widget.index + 1}',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
+          // Line 1: number + ingredient name
+          Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withAlpha(30),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${widget.index + 1}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _IngredientAutocomplete(entry: widget.entry),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Line 2: quantity + unit (full width, no delete crowding)
+          Row(
+            children: [
+              const SizedBox(width: 30),
+              SizedBox(
+                width: 90,
+                child: TextField(
+                  controller: widget.entry.qtyCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Cantidad',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: widget.entry.unit,
+                  isDense: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Unidad',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  items: commonUnits
+                      .map((u) =>
+                          DropdownMenuItem(value: u, child: Text(u)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => widget.entry.unit = v);
+                  },
+                ),
+              ),
+            ],
+          ),
+          // Line 3: delete button aligned right
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: widget.onRemove,
+              icon: Icon(Icons.delete_outline,
+                  size: 15, color: Colors.red.shade400),
+              label: Text(
+                'Eliminar',
+                style: TextStyle(fontSize: 12, color: Colors.red.shade400),
+              ),
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: _IngredientAutocomplete(
-              entry: widget.entry,
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 60,
-            child: TextField(
-              controller: widget.entry.qtyCtrl,
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 70,
-            child: DropdownButtonFormField<String>(
-              initialValue: widget.entry.unit,
-              isDense: true,
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              ),
-              items: commonUnits
-                  .map((u) => DropdownMenuItem(value: u, child: Text(u)))
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) setState(() => widget.entry.unit = v);
-              },
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18),
-            color: Colors.red.shade400,
-            onPressed: widget.onRemove,
           ),
         ],
       ),

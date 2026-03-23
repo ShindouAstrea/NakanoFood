@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/database/db_write_helper.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/sync_service.dart';
 import '../models/recipe.dart';
 import '../../pantry/models/product.dart';
 
@@ -12,6 +15,8 @@ final recipesProvider =
 class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
   @override
   Future<List<Recipe>> build() => _loadRecipes();
+
+  String? get _uid => ref.read(currentUserIdProvider);
 
   Future<List<Recipe>> _loadRecipes() async {
     final db = await DatabaseHelper.instance.database;
@@ -65,34 +70,33 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
 
   Future<void> addRecipe(Recipe recipe) async {
     final db = await DatabaseHelper.instance.database;
-    await db.insert('recipes', recipe.toMap());
-
+    await db.insert('recipes', withSync(recipe.toMap(), _uid));
     for (final ingredient in recipe.ingredients) {
-      await db.insert('recipe_ingredients', ingredient.toMap());
+      await db.insert(
+          'recipe_ingredients', withSync(ingredient.toMap(), _uid));
     }
     for (final step in recipe.steps) {
-      await db.insert('recipe_steps', step.toMap());
+      await db.insert('recipe_steps', withSync(step.toMap(), _uid));
     }
     for (final imagePath in recipe.imagePaths) {
-      await db.insert('recipe_images', {
+      await db.insert('recipe_images', withSync({
         'id': _uuid.v4(),
         'recipe_id': recipe.id,
         'image_path': imagePath,
-      });
+      }, _uid));
     }
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> updateRecipe(Recipe recipe) async {
     final db = await DatabaseHelper.instance.database;
     await db.update(
       'recipes',
-      recipe.toMap(),
+      withSync(recipe.toMap(), _uid),
       where: 'id = ?',
       whereArgs: [recipe.id],
     );
-
-    // Replace ingredients, steps, images
     await db.delete('recipe_ingredients',
         where: 'recipe_id = ?', whereArgs: [recipe.id]);
     await db.delete('recipe_steps',
@@ -101,29 +105,33 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
         where: 'recipe_id = ?', whereArgs: [recipe.id]);
 
     for (final ingredient in recipe.ingredients) {
-      await db.insert('recipe_ingredients', ingredient.toMap());
+      await db.insert(
+          'recipe_ingredients', withSync(ingredient.toMap(), _uid));
     }
     for (final step in recipe.steps) {
-      await db.insert('recipe_steps', step.toMap());
+      await db.insert('recipe_steps', withSync(step.toMap(), _uid));
     }
     for (final imagePath in recipe.imagePaths) {
-      await db.insert('recipe_images', {
+      await db.insert('recipe_images', withSync({
         'id': _uuid.v4(),
         'recipe_id': recipe.id,
         'image_path': imagePath,
-      });
+      }, _uid));
     }
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> deleteRecipe(String id) async {
     final db = await DatabaseHelper.instance.database;
     await db.delete('recipes', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 }
 
-// Recipe with pantry availability check
+// ─── Recipe with pantry availability ─────────────────────────────────────────
+
 final recipeWithAvailabilityProvider =
     FutureProvider.family<Recipe, String>((ref, recipeId) async {
   final recipes = await ref.watch(recipesProvider.future);
@@ -154,7 +162,6 @@ final recipeWithAvailabilityProvider =
     }
   }
 
-  // Calculate estimated cost
   double cost = 0;
   for (final ing in enrichedIngredients) {
     if (ing.productId != null) {
@@ -179,7 +186,8 @@ final recipeWithAvailabilityProvider =
   );
 });
 
-// Filter/search
+// ─── Filter / search ──────────────────────────────────────────────────────────
+
 final recipeTypeFilterProvider = StateProvider<String?>((ref) => null);
 final recipeSearchProvider = StateProvider<String>((ref) => '');
 

@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/database/db_write_helper.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/sync_service.dart';
 import '../models/product.dart';
 import '../models/price_history_entry.dart';
 
@@ -17,6 +20,8 @@ class CategoriesNotifier extends AsyncNotifier<List<ProductCategory>> {
   @override
   Future<List<ProductCategory>> build() => _loadCategories();
 
+  String? get _uid => ref.read(currentUserIdProvider);
+
   Future<List<ProductCategory>> _loadCategories() async {
     final db = await DatabaseHelper.instance.database;
     final catMaps = await db.query('product_categories', orderBy: 'name ASC');
@@ -32,7 +37,8 @@ class CategoriesNotifier extends AsyncNotifier<List<ProductCategory>> {
     }).toList();
   }
 
-  Future<ProductCategory> addCategory(String name, String? icon, String? color) async {
+  Future<ProductCategory> addCategory(
+      String name, String? icon, String? color) async {
     final db = await DatabaseHelper.instance.database;
     final cat = ProductCategory(
       id: _uuid.v4(),
@@ -41,8 +47,9 @@ class CategoriesNotifier extends AsyncNotifier<List<ProductCategory>> {
       icon: icon,
       color: color ?? '#9E9E9E',
     );
-    await db.insert('product_categories', cat.toMap());
+    await db.insert('product_categories', withSync(cat.toMap(), _uid));
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
     return cat;
   }
 
@@ -53,14 +60,17 @@ class CategoriesNotifier extends AsyncNotifier<List<ProductCategory>> {
       categoryId: categoryId,
       name: name,
     );
-    await db.insert('product_subcategories', sub.toMap());
+    await db.insert(
+        'product_subcategories', withSync(sub.toMap(), _uid));
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> deleteCategory(String id) async {
     final db = await DatabaseHelper.instance.database;
     await db.delete('product_categories', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 }
 
@@ -74,6 +84,8 @@ final productsProvider =
 class ProductsNotifier extends AsyncNotifier<List<Product>> {
   @override
   Future<List<Product>> build() => _loadProducts();
+
+  String? get _uid => ref.read(currentUserIdProvider);
 
   Future<List<Product>> _loadProducts() async {
     final db = await DatabaseHelper.instance.database;
@@ -109,11 +121,13 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
     NutritionalValues? nutritionalValues,
   }) async {
     final db = await DatabaseHelper.instance.database;
-    await db.insert('products', product.toMap());
+    await db.insert('products', withSync(product.toMap(), _uid));
     if (nutritionalValues != null) {
-      await db.insert('nutritional_values', nutritionalValues.toMap());
+      await db.insert(
+          'nutritional_values', withSync(nutritionalValues.toMap(), _uid));
     }
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> updateProduct(
@@ -124,7 +138,7 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
     final db = await DatabaseHelper.instance.database;
     await db.update(
       'products',
-      product.toMap(),
+      withSync(product.toMap(), _uid),
       where: 'id = ?',
       whereArgs: [product.id],
     );
@@ -141,18 +155,20 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
         whereArgs: [product.id],
         limit: 1,
       );
+      final data = withSync(nutritionalValues.toMap(), _uid);
       if (existing.isEmpty) {
-        await db.insert('nutritional_values', nutritionalValues.toMap());
+        await db.insert('nutritional_values', data);
       } else {
         await db.update(
           'nutritional_values',
-          nutritionalValues.toMap(),
+          data,
           where: 'product_id = ?',
           whereArgs: [product.id],
         );
       }
     }
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> updateCurrentQuantity(String productId, double quantity) async {
@@ -162,17 +178,20 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
       {
         'current_quantity': quantity,
         'updated_at': DateTime.now().toIso8601String(),
+        'synced_at': null,
       },
       where: 'id = ?',
       whereArgs: [productId],
     );
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> deleteProduct(String id) async {
     final db = await DatabaseHelper.instance.database;
     await db.delete('products', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
   }
 }
 

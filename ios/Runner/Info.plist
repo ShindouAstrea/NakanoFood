@@ -52,6 +52,19 @@
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Permite guardar fotos de recetas</string>
 
+    <!-- Custom URL scheme for Supabase OAuth deep link -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>io.supabase.nakanofood</string>
+            </array>
+        </dict>
+    </array>
+
     <!-- Notification permissions -->
     <key>UIBackgroundModes</key>
     <array>
