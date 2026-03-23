@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_helper.dart';
 import '../models/product.dart';
+import '../models/price_history_entry.dart';
 
 const _uuid = Uuid();
 
@@ -201,4 +202,16 @@ final lowStockProductsProvider = Provider<AsyncValue<List<Product>>>((ref) {
   return products.whenData(
       (list) => list.where((p) => p.isLow).toList()
         ..sort((a, b) => a.currentQuantity.compareTo(b.currentQuantity)));
+});
+
+final productPriceHistoryProvider =
+    FutureProvider.family<List<PriceHistoryEntry>, String>((ref, productId) async {
+  final db = await DatabaseHelper.instance.database;
+  final maps = await db.query(
+    'product_price_history',
+    where: 'product_id = ?',
+    whereArgs: [productId],
+    orderBy: 'purchased_at ASC',
+  );
+  return maps.map(PriceHistoryEntry.fromMap).toList();
 });

@@ -148,13 +148,45 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
           'products',
           {
             'current_quantity': product.currentQuantity + qty,
-            'last_price': price > 0 ? price : product.lastPrice,
-            if (price > 0) 'price_ref_qty': 1.0,
+            // price (actualPrice) is per-unit; scale back to the product's
+            // reference quantity so the stored format stays as "$5000/250g"
+            'last_price': price > 0
+                ? price * product.priceRefQty
+                : product.lastPrice,
             'updated_at': DateTime.now().toIso8601String(),
           },
           where: 'id = ?',
           whereArgs: [item.productId],
         );
+
+        if (price > 0) {
+          await db.insert('product_price_history', {
+            'id': _uuid.v4(),
+            'product_id': item.productId,
+            'price': price * product.priceRefQty,
+            'price_ref_qty': product.priceRefQty,
+            'unit': product.unit,
+            'purchased_at': DateTime.now().toIso8601String(),
+          });
+
+          // Keep only the 10 most recent entries per product
+          final history = await db.query(
+            'product_price_history',
+            where: 'product_id = ?',
+            whereArgs: [item.productId],
+            orderBy: 'purchased_at DESC',
+          );
+          if (history.length > 10) {
+            final toDelete = history.sublist(10);
+            for (final old in toDelete) {
+              await db.delete(
+                'product_price_history',
+                where: 'id = ?',
+                whereArgs: [old['id']],
+              );
+            }
+          }
+        }
       }
     }
 

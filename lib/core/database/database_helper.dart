@@ -18,7 +18,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -34,6 +34,19 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       await db.execute(
           'ALTER TABLE products ADD COLUMN price_ref_qty REAL DEFAULT 1.0');
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS product_price_history (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL,
+          price REAL NOT NULL,
+          price_ref_qty REAL DEFAULT 1.0,
+          unit TEXT NOT NULL,
+          purchased_at TEXT NOT NULL,
+          FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        )
+      ''');
     }
   }
 
@@ -207,6 +220,18 @@ class DatabaseHelper {
         recipe_id TEXT,
         FOREIGN KEY (category_id) REFERENCES meal_categories(id),
         FOREIGN KEY (recipe_id) REFERENCES recipes(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE product_price_history (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        price REAL NOT NULL,
+        price_ref_qty REAL DEFAULT 1.0,
+        unit TEXT NOT NULL,
+        purchased_at TEXT NOT NULL,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     ''');
 

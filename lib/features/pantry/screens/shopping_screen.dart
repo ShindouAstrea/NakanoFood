@@ -466,19 +466,60 @@ class _PurchaseDialogState extends State<_PurchaseDialog> {
     super.dispose();
   }
 
+  Widget _buildPriceComparison(ShoppingItem item, ColorScheme colorScheme) {
+    if (item.plannedPrice <= 0) return const SizedBox.shrink();
+    final totalPaid = double.tryParse(_priceCtrl.text);
+    final qty = double.tryParse(_qtyCtrl.text);
+    if (totalPaid == null || totalPaid == 0 || qty == null || qty == 0) {
+      return const SizedBox.shrink();
+    }
+    final newPPU = totalPaid / qty;
+    final pct = (newPPU - item.plannedPrice) / item.plannedPrice * 100;
+
+    final IconData icon;
+    final Color color;
+    final String label;
+
+    if (pct.abs() < 2) {
+      icon = Icons.remove_rounded;
+      color = colorScheme.onSurface.withAlpha(120);
+      label = 'Precio similar al anterior';
+    } else if (pct > 0) {
+      icon = Icons.trending_up_rounded;
+      color = Colors.red.shade600;
+      label = '+${pct.toStringAsFixed(0)}% más caro que la última vez';
+    } else {
+      icon = Icons.trending_down_rounded;
+      color = Colors.green.shade600;
+      label = '${pct.toStringAsFixed(0)}% más barato que la última vez';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
     final unit = widget.item.unit;
     final item = widget.item;
-
-    final totalPaid = double.tryParse(_priceCtrl.text);
-    final qty = double.tryParse(_qtyCtrl.text);
-    final pricePerUnit =
-        (totalPaid != null && qty != null && qty > 0 && totalPaid > 0)
-            ? totalPaid / qty
-            : null;
 
     return AlertDialog(
       title: Text('Comprar: ${item.productName}'),
@@ -512,18 +553,7 @@ class _PurchaseDialogState extends State<_PurchaseDialog> {
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
           ),
-          if (pricePerUnit != null) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '→ \$${pricePerUnit.toStringAsFixed(0)}/$unit',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurface.withAlpha(140),
-                ),
-              ),
-            ),
-          ],
+          _buildPriceComparison(item, colorScheme),
         ],
       ),
       actions: [

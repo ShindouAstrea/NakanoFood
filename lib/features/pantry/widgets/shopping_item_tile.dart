@@ -68,12 +68,25 @@ class _PurchasedBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark
-        ? Colors.green.withAlpha(30)
-        : Colors.green.shade50;
-    final textColor = isDark
-        ? Colors.green.shade300
-        : Colors.green.shade700;
+
+    // Price trend vs planned price (both per-unit)
+    IconData? trendIcon;
+    Color? trendColor;
+    if (item.plannedPrice > 0 && item.actualPrice > 0) {
+      final pct =
+          (item.actualPrice - item.plannedPrice) / item.plannedPrice * 100;
+      if (pct > 2) {
+        trendIcon = Icons.trending_up_rounded;
+        trendColor = Colors.red.shade500;
+      } else if (pct < -2) {
+        trendIcon = Icons.trending_down_rounded;
+        trendColor = Colors.green.shade600;
+      }
+    }
+
+    final bgColor = isDark ? Colors.green.withAlpha(30) : Colors.green.shade50;
+    final textColor =
+        isDark ? Colors.green.shade300 : Colors.green.shade700;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -82,13 +95,22 @@ class _PurchasedBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: textColor.withAlpha(80)),
       ),
-      child: Text(
-        '\$${item.totalCost.toStringAsFixed(0)}',
-        style: TextStyle(
-          color: textColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trendIcon != null) ...[
+            Icon(trendIcon, size: 13, color: trendColor),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            '\$${item.totalCost.toStringAsFixed(0)}',
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

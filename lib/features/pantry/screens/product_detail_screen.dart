@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../providers/pantry_provider.dart';
 import '../models/product.dart';
+import '../models/price_history_entry.dart';
 import 'add_edit_product_screen.dart';
 
 class ProductDetailScreen extends ConsumerWidget {
@@ -31,7 +33,8 @@ class ProductDetailScreen extends ConsumerWidget {
             body: const Center(child: Text('Producto no encontrado')),
           );
         }
-        return _buildDetail(context, ref, product);
+        final historyAsync = ref.watch(productPriceHistoryProvider(product.id));
+        return _buildDetail(context, ref, product, historyAsync);
       },
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -42,7 +45,8 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDetail(BuildContext context, WidgetRef ref, Product product) {
+  Widget _buildDetail(BuildContext context, WidgetRef ref, Product product,
+      AsyncValue<List<PriceHistoryEntry>> historyAsync) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final catColor = _parseColor(product.categoryColor);
@@ -206,6 +210,19 @@ class ProductDetailScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Historial de precios ─────────────────────────────────────────
+          historyAsync.when(
+            loading: () => const Card(
+              child: Padding(
+                padding: EdgeInsets.all(18),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+            error: (e, _) => const SizedBox.shrink(),
+            data: (history) => _PriceHistoryCard(history: history),
           ),
           const SizedBox(height: 12),
 
@@ -677,6 +694,263 @@ class _DetailRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Historial de precios ────────────────────────────────────────────────────
+
+class _PriceHistoryCard extends StatelessWidget {
+  final List<PriceHistoryEntry> history;
+
+  const _PriceHistoryCard({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.show_chart_rounded,
+                    size: 18, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Historial de precios',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (history.isEmpty) ...[
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Las próximas compras aparecerán aquí',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withAlpha(120),
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ] else ...[
+              _PriceSparkline(history: history),
+              const SizedBox(height: 12),
+              if (history.length < 2)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Las próximas compras aparecerán aquí',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withAlpha(120),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              SizedBox(
+                height: 64,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: history.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final entry = history[index];
+                    final isLast = index == history.length - 1;
+                    final prev = index > 0 ? history[index - 1] : null;
+                    final trend = prev == null
+                        ? null
+                        : entry.price > prev.price
+                            ? 1
+                            : entry.price < prev.price
+                                ? -1
+                                : 0;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isLast
+                            ? colorScheme.primary.withAlpha(15)
+                            : colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isLast
+                              ? colorScheme.primary
+                              : colorScheme.onSurface.withAlpha(30),
+                          width: isLast ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            DateFormat('dd/MM').format(entry.purchasedAt),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.onSurface.withAlpha(140),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                entry.priceLabel,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isLast
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurface,
+                                ),
+                              ),
+                              if (trend != null) ...[
+                                const SizedBox(width: 2),
+                                Icon(
+                                  trend > 0
+                                      ? Icons.arrow_upward_rounded
+                                      : trend < 0
+                                          ? Icons.arrow_downward_rounded
+                                          : Icons.remove_rounded,
+                                  size: 12,
+                                  color: trend > 0
+                                      ? Colors.red.shade600
+                                      : trend < 0
+                                          ? Colors.green.shade600
+                                          : colorScheme.onSurface
+                                              .withAlpha(100),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceSparkline extends StatelessWidget {
+  final List<PriceHistoryEntry> history;
+
+  const _PriceSparkline({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 70,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _SparklinePainter(history: history),
+      ),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  final List<PriceHistoryEntry> history;
+
+  _SparklinePainter({required this.history});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (history.isEmpty) return;
+
+    final prices = history.map((e) => e.price).toList();
+    final minPrice = prices.reduce((a, b) => a < b ? a : b);
+    final maxPrice = prices.reduce((a, b) => a > b ? a : b);
+
+    final yMin = minPrice * 0.9;
+    final yMax = maxPrice * 1.1;
+    final yRange = yMax - yMin;
+
+    final isFlat = yRange == 0;
+
+    final lineColor = prices.last <= prices.first
+        ? Colors.green.shade500
+        : Colors.orange.shade700;
+
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final dotPaint = Paint()
+      ..color = lineColor
+      ..style = PaintingStyle.fill;
+
+    Offset toOffset(int index, double price) {
+      final x = history.length == 1
+          ? size.width / 2
+          : (index / (history.length - 1)) * size.width;
+      final y = isFlat
+          ? size.height / 2
+          : size.height - ((price - yMin) / yRange) * size.height;
+      return Offset(x, y.clamp(4.0, size.height - 4.0));
+    }
+
+    if (history.length == 1) {
+      // Dashed horizontal line
+      final y = size.height / 2;
+      const dashWidth = 6.0;
+      const dashGap = 4.0;
+      var x = 0.0;
+      while (x < size.width) {
+        canvas.drawLine(Offset(x, y),
+            Offset((x + dashWidth).clamp(0.0, size.width), y), linePaint);
+        x += dashWidth + dashGap;
+      }
+      // Single dot
+      canvas.drawCircle(toOffset(0, prices[0]), 5.0, dotPaint);
+      canvas.drawCircle(toOffset(0, prices[0]), 3.0,
+          Paint()..color = Colors.white);
+    } else {
+      // Draw line segments
+      final path = Path();
+      for (var i = 0; i < history.length; i++) {
+        final offset = toOffset(i, prices[i]);
+        if (i == 0) {
+          path.moveTo(offset.dx, offset.dy);
+        } else {
+          path.lineTo(offset.dx, offset.dy);
+        }
+      }
+      canvas.drawPath(path, linePaint);
+
+      // Draw dots
+      for (var i = 0; i < history.length; i++) {
+        final offset = toOffset(i, prices[i]);
+        final isLast = i == history.length - 1;
+        canvas.drawCircle(offset, isLast ? 5.0 : 3.5, dotPaint);
+        if (isLast) {
+          canvas.drawCircle(offset, 2.5, Paint()..color = Colors.white);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter oldDelegate) =>
+      oldDelegate.history != history;
 }
 
 // ── Card nutricional ────────────────────────────────────────────────────────
