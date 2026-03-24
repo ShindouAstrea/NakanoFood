@@ -9,7 +9,6 @@ import 'features/pantry/screens/pantry_screen.dart';
 import 'features/recipes/screens/recipes_screen.dart';
 import 'features/meal_planning/screens/meal_planning_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
-import 'shared/widgets/splash_screen.dart';
 
 class NakanoFoodApp extends ConsumerWidget {
   const NakanoFoodApp({super.key});
@@ -44,16 +43,13 @@ class _AuthGate extends ConsumerWidget {
     // If Supabase not configured → go straight to main app
     if (!SupabaseConfig.isConfigured) return const MainNavigation();
 
-    final authAsync = ref.watch(authStateProvider);
+    // Watch the stream so the widget rebuilds on login/logout events
+    ref.watch(authStateProvider);
 
-    return authAsync.when(
-      data: (authState) {
-        if (authState.session != null) return const MainNavigation();
-        return const LoginScreen();
-      },
-      loading: () => const SplashScreen(),
-      error: (_, __) => const MainNavigation(),
-    );
+    // currentUserProvider is synchronous — no loading state, no splash freeze
+    final user = ref.watch(currentUserProvider);
+    if (user != null) return const MainNavigation();
+    return const LoginScreen();
   }
 }
 
