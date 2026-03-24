@@ -22,7 +22,7 @@ class DatabaseHelper {
         : join(await getDatabasesPath(), filePath);
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -79,6 +79,26 @@ class DatabaseHelper {
             'sort_order': 0,
           });
         }
+      }
+    }
+    if (oldVersion < 7) {
+      // Add missing updated_at to tables that had it in Supabase but not locally
+      const missingUpdatedAt = [
+        'recipe_ingredients',
+        'recipe_steps',
+        'recipe_images',
+        'nutritional_values',
+        'product_price_history',
+        'meal_category_days',
+      ];
+      final now = DateTime.now().toIso8601String();
+      for (final table in missingUpdatedAt) {
+        try {
+          await db.execute('ALTER TABLE $table ADD COLUMN updated_at TEXT');
+          await db.execute(
+              'UPDATE $table SET updated_at = ? WHERE updated_at IS NULL',
+              [now]);
+        } catch (_) {}
       }
     }
     if (oldVersion < 6) {
@@ -200,6 +220,7 @@ class DatabaseHelper {
         trans_fats REAL,
         proteins REAL,
         sodium REAL,
+        updated_at TEXT,
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -271,6 +292,7 @@ class DatabaseHelper {
         product_name TEXT NOT NULL,
         quantity REAL NOT NULL,
         unit TEXT NOT NULL,
+        updated_at TEXT,
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
@@ -283,6 +305,7 @@ class DatabaseHelper {
         recipe_id TEXT NOT NULL,
         step_number INTEGER NOT NULL,
         description TEXT NOT NULL,
+        updated_at TEXT,
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
@@ -294,6 +317,7 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         recipe_id TEXT NOT NULL,
         image_path TEXT NOT NULL,
+        updated_at TEXT,
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
@@ -320,6 +344,7 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         category_id TEXT NOT NULL,
         day_of_week INTEGER NOT NULL,
+        updated_at TEXT,
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (category_id) REFERENCES meal_categories(id) ON DELETE CASCADE
@@ -362,6 +387,7 @@ class DatabaseHelper {
         price_ref_qty REAL DEFAULT 1.0,
         unit TEXT NOT NULL,
         purchased_at TEXT NOT NULL,
+        updated_at TEXT,
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE

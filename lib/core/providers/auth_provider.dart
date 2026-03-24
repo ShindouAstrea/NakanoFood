@@ -66,7 +66,7 @@ class AuthNotifier extends AsyncNotifier<User?> {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: kIsWeb
-            ? null // Supabase maneja el redirect en web automáticamente
+            ? 'https://nakano-food.vercel.app'
             : 'io.supabase.nakanofood://login-callback',
         authScreenLaunchMode: kIsWeb
             ? LaunchMode.platformDefault
