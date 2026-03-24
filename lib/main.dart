@@ -6,7 +6,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/supabase_config.dart';
-import 'features/meal_planning/providers/notification_service.dart';
 import 'app.dart';
 
 void main() async {
@@ -24,10 +23,6 @@ void main() async {
   }
 
   await initializeDateFormatting('es', null);
-
-  if (!kIsWeb) {
-    await NotificationService.initialize();
-  }
 
   runApp(
     const ProviderScope(

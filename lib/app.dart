@@ -5,6 +5,7 @@ import 'core/providers/auth_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/meal_planning/providers/notification_service.dart';
 import 'features/pantry/screens/pantry_screen.dart';
 import 'features/recipes/screens/recipes_screen.dart';
 import 'features/meal_planning/screens/meal_planning_screen.dart';
@@ -62,6 +63,14 @@ class MainNavigation extends ConsumerStatefulWidget {
 
 class _MainNavigationState extends ConsumerState<MainNavigation> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationService.initialize().catchError((e) {
+      debugPrint('[Notifications] init error: $e');
+    });
+  }
 
   final List<Widget> _screens = const [
     PantryScreen(),

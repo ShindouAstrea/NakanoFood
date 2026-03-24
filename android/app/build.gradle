@@ -27,7 +27,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.astrea.nakano_food"
-    compileSdk flutter.compileSdkVersion
+    compileSdk 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -47,9 +47,9 @@ android {
         applicationId "com.astrea.nakano_food"
         namespace "com.astrea.nakano_food"
         minSdkVersion flutter.minSdkVersion
-        targetSdkVersion 36
+        targetSdkVersion 34
         compileSdkVersion 36
-        versionCode flutterVersionVersionCode.toInteger()
+        versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
 

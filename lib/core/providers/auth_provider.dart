@@ -8,6 +8,7 @@ import '../database/database_helper.dart';
 
 final currentUserProvider = Provider<User?>((ref) {
   if (!SupabaseConfig.isConfigured) return null;
+  ref.watch(authStateProvider); // invalida este provider cuando cambia auth
   return Supabase.instance.client.auth.currentUser;
 });
 
@@ -50,6 +51,7 @@ class AuthNotifier extends AsyncNotifier<User?> {
       final res = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo: 'io.supabase.nakanofood://login-callback',
       );
       return res.user;
     });
