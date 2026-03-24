@@ -11,18 +11,35 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _fadeAnim;
-  late Animation<double> _scaleAnim;
+  late Animation<Offset> _slideAnim;
+  late Animation<double> _loaderAnim;
+
+  static const String _appVersion = '2.0.1';
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1200),
     )..forward();
-    _fadeAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
-    _scaleAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack),
+
+    _fadeAnim = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+    );
+
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+    ));
+
+    _loaderAnim = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.5, 1.0, curve: Curves.easeIn),
     );
   }
 
@@ -34,65 +51,125 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: ScaleTransition(
-            scale: _scaleAnim,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // App icon placeholder
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorScheme.primary.withAlpha(80),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF0288D1),
+              Color(0xFF29B6F6),
+              Color(0xFF01579B),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Centro: logo + nombre
+              Center(
+                child: FadeTransition(
+                  opacity: _fadeAnim,
+                  child: SlideTransition(
+                    position: _slideAnim,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Logo con sombra
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(32),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(100),
+                                blurRadius: 32,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(32),
+                            child: Image.asset(
+                              'assets/icon/NakanoFood.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: const Color(0xFF388E3C),
+                                child: const Icon(
+                                  Icons.kitchen_rounded,
+                                  size: 64,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        // Nombre
+                        Text(
+                          'NakanoFood',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 1.2,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Tu cocina más ordenada',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white.withAlpha(180),
+                                    letterSpacing: 0.5,
+                                  ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Icon(
-                    Icons.kitchen_rounded,
-                    size: 52,
-                    color: colorScheme.onPrimary,
+                ),
+              ),
+
+              // Parte inferior: loader + versión
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 48),
+                  child: FadeTransition(
+                    opacity: _loaderAnim,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 160,
+                          child: LinearProgressIndicator(
+                            backgroundColor: Colors.white.withAlpha(40),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                            minHeight: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'v$_appVersion',
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: Colors.white.withAlpha(120),
+                                    letterSpacing: 1.5,
+                                  ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'NakanoFood',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Cargando...',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurface.withAlpha(140),
-                      ),
-                ),
-                const SizedBox(height: 40),
-                SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -10,6 +10,7 @@ import 'features/pantry/screens/pantry_screen.dart';
 import 'features/recipes/screens/recipes_screen.dart';
 import 'features/meal_planning/screens/meal_planning_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'shared/widgets/splash_screen.dart';
 
 class NakanoFoodApp extends ConsumerWidget {
   const NakanoFoodApp({super.key});
@@ -34,20 +35,33 @@ class NakanoFoodApp extends ConsumerWidget {
   }
 }
 
-/// Redirects to LoginScreen when Supabase is configured and no user is logged
-/// in. Otherwise opens the main app directly (offline-only mode).
-class _AuthGate extends ConsumerWidget {
+/// Muestra el SplashScreen un mínimo de 2.5 s y luego navega según el estado
+/// de autenticación.
+class _AuthGate extends ConsumerStatefulWidget {
   const _AuthGate();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // If Supabase not configured → go straight to main app
+  ConsumerState<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<_AuthGate> {
+  bool _splashDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted) setState(() => _splashDone = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_splashDone) return const SplashScreen();
+
     if (!SupabaseConfig.isConfigured) return const MainNavigation();
 
-    // Watch the stream so the widget rebuilds on login/logout events
     ref.watch(authStateProvider);
-
-    // currentUserProvider is synchronous — no loading state, no splash freeze
     final user = ref.watch(currentUserProvider);
     if (user != null) return const MainNavigation();
     return const LoginScreen();
