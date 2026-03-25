@@ -28,10 +28,20 @@ class ShoppingHistoryScreen extends ConsumerWidget {
               subtitle: 'Las compras completadas aparecerán aquí',
             );
           }
+          final completed = sessions
+              .where((s) => s.status == ShoppingStatus.completed)
+              .toList();
+
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: sessions.length,
-            itemBuilder: (_, i) => _SessionCard(session: sessions[i]),
+            itemCount: sessions.length + (completed.isNotEmpty ? 1 : 0),
+            itemBuilder: (_, i) {
+              if (i == 0 && completed.isNotEmpty) {
+                return _SpendingChart(sessions: completed);
+              }
+              final session = sessions[completed.isNotEmpty ? i - 1 : i];
+              return _SessionCard(session: session);
+            },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -40,6 +50,181 @@ class ShoppingHistoryScreen extends ConsumerWidget {
     );
   }
 }
+
+// ─── Gráfico de gasto mensual ─────────────────────────────────────────────────
+
+class _SpendingChart extends StatelessWidget {
+  final List<ShoppingSession> sessions;
+  const _SpendingChart({required this.sessions});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    // Agrupar por mes (últimos 6 meses)
+    final now = DateTime.now();
+    final months = List.generate(6, (i) {
+      final d = DateTime(now.year, now.month - (5 - i));
+      return d;
+    });
+
+    final monthlyTotals = {
+      for (final m in months)
+        DateTime(m.year, m.month): 0.0,
+    };
+
+    for (final s in sessions) {
+      final key = DateTime(s.createdAt.year, s.createdAt.month);
+      if (monthlyTotals.containsKey(key)) {
+        monthlyTotals[key] = monthlyTotals[key]! + s.calculatedTotal;
+      }
+    }
+
+    final values = monthlyTotals.values.toList();
+    final maxVal = values.fold(0.0, (a, b) => b > a ? b : a);
+    final totalGasto = values.fold(0.0, (a, b) => a + b);
+
+    // Gasto promedio solo de meses con compras
+    final mesesConCompras = values.where((v) => v > 0).length;
+    final promedio = mesesConCompras > 0 ? totalGasto / mesesConCompras : 0.0;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Gasto mensual',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                _StatBadge(
+                  label: 'Total 6 meses',
+                  value: '\$${totalGasto.toStringAsFixed(0)}',
+                  color: primary,
+                ),
+                const SizedBox(width: 8),
+                _StatBadge(
+                  label: 'Promedio/mes',
+                  value: '\$${promedio.toStringAsFixed(0)}',
+                  color: theme.colorScheme.secondary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 130,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: monthlyTotals.entries.map((entry) {
+                  final month = entry.key;
+                  final value = entry.value;
+                  final ratio = maxVal > 0 ? value / maxVal : 0.0;
+                  final isCurrentMonth =
+                      month.year == now.year && month.month == now.month;
+
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (value > 0)
+                            Text(
+                              '\$${value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: isCurrentMonth
+                                    ? primary
+                                    : theme.colorScheme.onSurface
+                                        .withAlpha(160),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          const SizedBox(height: 3),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 600),
+                            curve: Curves.easeOut,
+                            height: value > 0 ? (ratio * 80).clamp(6, 80) : 4,
+                            decoration: BoxDecoration(
+                              color: isCurrentMonth
+                                  ? primary
+                                  : value > 0
+                                      ? primary.withAlpha(120)
+                                      : theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(4),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            DateFormat('MMM', 'es').format(month),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: isCurrentMonth
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isCurrentMonth
+                                  ? primary
+                                  : theme.colorScheme.onSurface.withAlpha(140),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatBadge extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _StatBadge(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 10, color: color.withAlpha(180))),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Session card ─────────────────────────────────────────────────────────────
 
 class _SessionCard extends StatelessWidget {
   final ShoppingSession session;
