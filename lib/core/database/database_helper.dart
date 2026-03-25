@@ -22,7 +22,7 @@ class DatabaseHelper {
         : join(await getDatabasesPath(), filePath);
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -100,6 +100,23 @@ class DatabaseHelper {
               [now]);
         } catch (_) {}
       }
+    }
+    if (oldVersion < 8) {
+      try {
+        await db.execute(
+            'ALTER TABLE recipes ADD COLUMN rating INTEGER DEFAULT 0');
+      } catch (_) {}
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS recipe_cookings (
+          id TEXT PRIMARY KEY,
+          recipe_id TEXT NOT NULL,
+          cooked_at TEXT NOT NULL,
+          updated_at TEXT,
+          user_id TEXT,
+          synced_at TEXT,
+          FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+        )
+      ''');
     }
     if (oldVersion < 6) {
       // Add sync columns to all root tables
@@ -277,10 +294,23 @@ class DatabaseHelper {
         cook_time INTEGER,
         estimated_cost REAL DEFAULT 0,
         notes TEXT,
+        rating INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         user_id TEXT,
         synced_at TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE recipe_cookings (
+        id TEXT PRIMARY KEY,
+        recipe_id TEXT NOT NULL,
+        cooked_at TEXT NOT NULL,
+        updated_at TEXT,
+        user_id TEXT,
+        synced_at TEXT,
+        FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
       )
     ''');
 

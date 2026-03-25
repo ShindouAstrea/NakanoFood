@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../database/database_helper.dart';
 import '../providers/auth_provider.dart';
+import 'image_storage_service.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const _uploadOrder = [
   'recipe_ingredients',
   'recipe_steps',
   'recipe_images',
+  'recipe_cookings',
   'meal_categories',
   'meal_category_days',
   'meal_plans',
@@ -68,6 +70,7 @@ class SyncService {
     try {
       final db = await DatabaseHelper.instance.database;
       await _claimLocalRecords(db, userId!);
+      await _uploadPendingImages(db, userId!);
       for (final table in _uploadOrder) {
         await _uploadTable(db, table, userId!);
       }
@@ -123,6 +126,61 @@ class SyncService {
         await db.execute(
           'UPDATE $table SET user_id = ? WHERE user_id IS NULL',
           [uid],
+        );
+      }
+    }
+  }
+
+  /// Upload any local image files to Supabase Storage and replace their paths
+  /// with public URLs in the local DB (migration for pre-existing local images).
+  Future<void> _uploadPendingImages(Database db, String uid) async {
+    // recipe_images table
+    final imageRows = await db.query(
+      'recipe_images',
+      where: "image_path NOT LIKE 'http%' AND (user_id = ? OR user_id IS NULL)",
+      whereArgs: [uid],
+    );
+    for (final row in imageRows) {
+      final localPath = row['image_path'] as String;
+      final recipeId = row['recipe_id'] as String;
+      final id = row['id'] as String;
+      final url = await ImageStorageService.uploadImage(
+        localPath: localPath,
+        userId: uid,
+        recipeId: recipeId,
+      );
+      if (url != null) {
+        await db.update(
+          'recipe_images',
+          {'image_path': url, 'synced_at': null},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    }
+
+    // main_image_path in recipes table
+    final recipeRows = await db.query(
+      'recipes',
+      columns: ['id', 'main_image_path'],
+      where:
+          "main_image_path IS NOT NULL AND main_image_path NOT LIKE 'http%' AND (user_id = ? OR user_id IS NULL)",
+      whereArgs: [uid],
+    );
+    for (final row in recipeRows) {
+      final localPath = row['main_image_path'] as String;
+      final recipeId = row['id'] as String;
+      final url = await ImageStorageService.uploadImage(
+        localPath: localPath,
+        userId: uid,
+        recipeId: recipeId,
+      );
+      if (url != null) {
+        await db.update(
+          'recipes',
+          {'main_image_path': url, 'synced_at': null},
+          where: 'id = ?',
+          whereArgs: [recipeId],
         );
       }
     }
