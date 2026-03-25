@@ -5,6 +5,7 @@ import '../models/recipe.dart';
 import '../services/recipe_share_service.dart';
 import '../widgets/recipe_card.dart';
 import 'add_edit_recipe_screen.dart';
+import 'explore_recipes_screen.dart';
 import 'recipe_detail_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/skeletons/recipe_card_skeleton.dart';
@@ -27,6 +28,15 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
       appBar: AppBar(
         title: const Text('Recetas'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: 'Explorar recetas',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const ExploreRecipesScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.download_outlined),
             tooltip: 'Importar receta',
