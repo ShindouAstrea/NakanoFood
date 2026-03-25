@@ -1,6 +1,6 @@
 {
   "installCommand": "git clone https://github.com/flutter/flutter.git --depth 1 -b stable $HOME/flutter && $HOME/flutter/bin/flutter config --enable-web",
-  "buildCommand": "export PATH=$HOME/flutter/bin:$PATH && flutter pub get && flutter build web --release --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY",
+  "buildCommand": "export PATH=$HOME/flutter/bin:$PATH && printf 'SUPABASE_URL=%s\\nSUPABASE_ANON_KEY=%s\\n' \"$SUPABASE_URL\" \"$SUPABASE_ANON_KEY\" > .env && flutter pub get && flutter build web --release --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY",
   "outputDirectory": "build/web",
   "headers": [
     {
