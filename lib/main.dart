@@ -13,10 +13,14 @@ import 'app.dart';
 
 void main() async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: binding);
+  if (!kIsWeb) FlutterNativeSplash.preserve(widgetsBinding: binding);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  await dotenv.load(fileName: '.env');
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {
+    // En producción web las credenciales vienen de --dart-define
+  }
 
   if (kIsWeb) {
     databaseFactory = databaseFactoryFfiWeb;
