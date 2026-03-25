@@ -166,6 +166,9 @@ class Recipe {
   final int? cookTime;
   final double estimatedCost;
   final String? notes;
+  final int rating; // 0–5
+  final int cookCount; // veces cocinada (runtime, cargado desde recipe_cookings)
+  final DateTime? lastCookedAt; // última vez cocinada (runtime)
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<RecipeIngredient> ingredients;
@@ -183,6 +186,9 @@ class Recipe {
     this.cookTime,
     this.estimatedCost = 0,
     this.notes,
+    this.rating = 0,
+    this.cookCount = 0,
+    this.lastCookedAt,
     required this.createdAt,
     required this.updatedAt,
     this.ingredients = const [],
@@ -204,6 +210,7 @@ class Recipe {
       cookTime: map['cook_time'] as int?,
       estimatedCost: (map['estimated_cost'] as num?)?.toDouble() ?? 0,
       notes: map['notes'] as String?,
+      rating: map['rating'] as int? ?? 0,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
     );
@@ -221,6 +228,7 @@ class Recipe {
       'cook_time': cookTime,
       'estimated_cost': estimatedCost,
       'notes': notes,
+      'rating': rating,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -237,6 +245,9 @@ class Recipe {
     int? cookTime,
     double? estimatedCost,
     String? notes,
+    int? rating,
+    int? cookCount,
+    DateTime? lastCookedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<RecipeIngredient>? ingredients,
@@ -254,6 +265,9 @@ class Recipe {
       cookTime: cookTime ?? this.cookTime,
       estimatedCost: estimatedCost ?? this.estimatedCost,
       notes: notes ?? this.notes,
+      rating: rating ?? this.rating,
+      cookCount: cookCount ?? this.cookCount,
+      lastCookedAt: lastCookedAt ?? this.lastCookedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       ingredients: ingredients ?? this.ingredients,

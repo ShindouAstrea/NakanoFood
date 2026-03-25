@@ -2,10 +2,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/recipe_provider.dart';
 import '../models/recipe.dart';
 import '../services/recipe_share_service.dart';
+import '../../pantry/screens/shopping_screen.dart';
 import 'add_edit_recipe_screen.dart';
 
 
@@ -28,16 +31,33 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     final recipeAsync =
         ref.watch(recipeWithAvailabilityProvider(widget.recipeId));
     final theme = Theme.of(context);
+    final recipe = recipeAsync.value;
 
     return Scaffold(
+      floatingActionButton: recipe != null && recipe.steps.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () => _showCookingMode(context, recipe),
+              icon: const Icon(Icons.soup_kitchen_outlined),
+              label: const Text('Modo cocina'),
+            )
+          : null,
       body: recipeAsync.when(
         data: (recipe) => _buildDetail(context, recipe, theme),
-        loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator())),
-        error: (e, _) =>
-            Scaffold(body: Center(child: Text('Error: $e'))),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
       ),
     );
+  }
+
+  void _showCookingMode(BuildContext context, Recipe recipe) {
+    WakelockPlus.enable();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _CookingModeScreen(recipe: recipe),
+      ),
+    ).then((_) => WakelockPlus.disable());
   }
 
   Widget _buildDetail(
@@ -158,11 +178,13 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                             Icon(Icons.warning_amber_rounded,
                                 color: Colors.red.shade700, size: 18),
                             const SizedBox(width: 8),
-                            Text(
-                              'Ingredientes insuficientes',
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Text(
+                                'Ingredientes insuficientes',
+                                style: TextStyle(
+                                  color: Colors.red.shade700,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -174,6 +196,27 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                                   fontSize: 13,
                                   color: Colors.red.shade600),
                             )),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ShoppingScreen()),
+                            ),
+                            icon: Icon(Icons.shopping_cart_outlined,
+                                size: 16, color: Colors.red.shade700),
+                            label: Text('Ir a lista de compras',
+                                style:
+                                    TextStyle(color: Colors.red.shade700)),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.red.shade300),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -220,6 +263,97 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                           'Porciones: ${(recipe.portions * _portionMultiplier).toStringAsFixed(_portionMultiplier == 0.5 ? 1 : 0)}',
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Rating & cook history
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text('Mi calificación',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.bold)),
+                            const Spacer(),
+                            if (recipe.cookCount > 0)
+                              Chip(
+                                avatar: const Icon(Icons.restaurant,
+                                    size: 14),
+                                label: Text(
+                                  recipe.cookCount == 1
+                                      ? 'Cocinada 1 vez'
+                                      : 'Cocinada ${recipe.cookCount} veces',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: List.generate(5, (i) {
+                            final star = i + 1;
+                            return GestureDetector(
+                              onTap: () => ref
+                                  .read(recipesProvider.notifier)
+                                  .rateRecipe(recipe.id, star),
+                              child: Icon(
+                                star <= recipe.rating
+                                    ? Icons.star_rounded
+                                    : Icons.star_outline_rounded,
+                                color: Colors.amber,
+                                size: 32,
+                              ),
+                            );
+                          }),
+                        ),
+                        if (recipe.lastCookedAt != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Última vez: ${DateFormat('d MMM yyyy', 'es').format(recipe.lastCookedAt!)}',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: Colors.grey.shade600),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () async {
+                              await ref
+                                  .read(recipesProvider.notifier)
+                                  .markCooked(recipe.id);
+                              ref.invalidate(recipeWithAvailabilityProvider(
+                                  widget.recipeId));
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        '¡Registrado! La receta fue marcada como cocinada hoy.'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.check_circle_outline,
+                                size: 18),
+                            label: const Text('Preparé esta receta hoy'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  theme.colorScheme.primaryContainer,
+                              foregroundColor:
+                                  theme.colorScheme.onPrimaryContainer,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -649,6 +783,136 @@ class _InfoChip extends StatelessWidget {
           Text(label,
               style:
                   TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Modo Cocina ──────────────────────────────────────────────────────────────
+
+class _CookingModeScreen extends StatefulWidget {
+  final Recipe recipe;
+  const _CookingModeScreen({required this.recipe});
+
+  @override
+  State<_CookingModeScreen> createState() => _CookingModeScreenState();
+}
+
+class _CookingModeScreenState extends State<_CookingModeScreen> {
+  int _step = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = widget.recipe.steps;
+    final theme = Theme.of(context);
+    final current = steps[_step];
+    final isFirst = _step == 0;
+    final isLast = _step == steps.length - 1;
+
+    return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: Text(widget.recipe.name),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Text(
+                '${_step + 1} / ${steps.length}',
+                style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Progress bar
+          LinearProgressIndicator(
+            value: (_step + 1) / steps.length,
+            minHeight: 4,
+          ),
+
+          // Step content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Step number badge
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${current.stepNumber}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Step description
+                  Text(
+                    current.description,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Navigation
+          SafeArea(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: isFirst
+                          ? null
+                          : () => setState(() => _step--),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('Anterior'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: isLast
+                        ? FilledButton.icon(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.check_rounded),
+                            label: const Text('¡Listo!'),
+                          )
+                        : FilledButton.icon(
+                            onPressed: () => setState(() => _step++),
+                            icon: const Icon(Icons.arrow_forward_rounded),
+                            label: const Text('Siguiente'),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

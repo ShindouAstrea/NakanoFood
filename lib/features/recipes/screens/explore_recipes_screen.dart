@@ -41,18 +41,18 @@ class ExploreRecipesScreen extends ConsumerWidget {
                   width: 1,
                 ),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.auto_awesome_rounded,
-                      size: 11, color: colorScheme.tertiary),
-                  const SizedBox(width: 3),
-                  Text(
+                   Icon(Icons.auto_awesome_rounded,
+                      size: 11),
+                   SizedBox(width: 3),
+                   Text(
                     'IA',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: colorScheme.tertiary,
+
                     ),
                   ),
                 ],

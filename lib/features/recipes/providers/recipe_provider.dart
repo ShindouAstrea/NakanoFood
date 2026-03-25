@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../core/database/db_write_helper.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/image_storage_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../models/recipe.dart';
 import '../../pantry/models/product.dart';
@@ -28,13 +29,29 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
       final ingredients = await _loadIngredients(recipe.id);
       final steps = await _loadSteps(recipe.id);
       final images = await _loadImages(recipe.id);
+      final cookings = await _loadCookings(recipe.id);
       recipes.add(recipe.copyWith(
         ingredients: ingredients,
         steps: steps,
         imagePaths: images,
+        cookCount: cookings.length,
+        lastCookedAt: cookings.isNotEmpty ? cookings.first : null,
       ));
     }
     return recipes;
+  }
+
+  Future<List<DateTime>> _loadCookings(String recipeId) async {
+    final db = await DatabaseHelper.instance.database;
+    final maps = await db.query(
+      'recipe_cookings',
+      where: 'recipe_id = ?',
+      whereArgs: [recipeId],
+      orderBy: 'cooked_at DESC',
+    );
+    return maps
+        .map((m) => DateTime.parse(m['cooked_at'] as String))
+        .toList();
   }
 
   Future<List<RecipeIngredient>> _loadIngredients(String recipeId) async {
@@ -68,20 +85,54 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
     return maps.map((m) => m['image_path'] as String).toList();
   }
 
+  /// Uploads local image paths to Supabase Storage and returns the resolved
+  /// paths (URLs for uploaded images, original path if upload failed or skipped).
+  Future<List<String>> _uploadImages(
+      List<String> paths, String recipeId) async {
+    if (_uid == null) return paths;
+    final resolved = <String>[];
+    for (final path in paths) {
+      if (ImageStorageService.isRemoteUrl(path)) {
+        resolved.add(path);
+      } else {
+        final url = await ImageStorageService.uploadImage(
+          localPath: path,
+          userId: _uid!,
+          recipeId: recipeId,
+        );
+        resolved.add(url ?? path);
+      }
+    }
+    return resolved;
+  }
+
   Future<void> addRecipe(Recipe recipe) async {
+    final resolvedPaths = await _uploadImages(recipe.imagePaths, recipe.id);
+    final resolvedMain = resolvedPaths.isNotEmpty &&
+            recipe.mainImagePath != null &&
+            !ImageStorageService.isRemoteUrl(recipe.mainImagePath!)
+        ? resolvedPaths.firstWhere(
+            (p) => ImageStorageService.isRemoteUrl(p),
+            orElse: () => recipe.mainImagePath!)
+        : recipe.mainImagePath;
+    final resolved = recipe.copyWith(
+      mainImagePath: resolvedMain,
+      imagePaths: resolvedPaths,
+    );
+
     final db = await DatabaseHelper.instance.database;
-    await db.insert('recipes', withSync(recipe.toMap(), _uid));
-    for (final ingredient in recipe.ingredients) {
+    await db.insert('recipes', withSync(resolved.toMap(), _uid));
+    for (final ingredient in resolved.ingredients) {
       await db.insert(
           'recipe_ingredients', withSync(ingredient.toMap(), _uid));
     }
-    for (final step in recipe.steps) {
+    for (final step in resolved.steps) {
       await db.insert('recipe_steps', withSync(step.toMap(), _uid));
     }
-    for (final imagePath in recipe.imagePaths) {
+    for (final imagePath in resolved.imagePaths) {
       await db.insert('recipe_images', withSync({
         'id': _uuid.v4(),
-        'recipe_id': recipe.id,
+        'recipe_id': resolved.id,
         'image_path': imagePath,
       }, _uid));
     }
@@ -90,34 +141,71 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
   }
 
   Future<void> updateRecipe(Recipe recipe) async {
+    final resolvedPaths = await _uploadImages(recipe.imagePaths, recipe.id);
+    // Map old local path → new URL for main image
+    String? resolvedMain = recipe.mainImagePath;
+    if (resolvedMain != null && !ImageStorageService.isRemoteUrl(resolvedMain)) {
+      final idx = recipe.imagePaths.indexOf(resolvedMain);
+      if (idx >= 0 && idx < resolvedPaths.length) {
+        resolvedMain = resolvedPaths[idx];
+      }
+    }
+    final resolved = recipe.copyWith(
+      mainImagePath: resolvedMain,
+      imagePaths: resolvedPaths,
+    );
+
     final db = await DatabaseHelper.instance.database;
     await db.update(
       'recipes',
-      withSync(recipe.toMap(), _uid),
+      withSync(resolved.toMap(), _uid),
       where: 'id = ?',
-      whereArgs: [recipe.id],
+      whereArgs: [resolved.id],
     );
     await db.delete('recipe_ingredients',
-        where: 'recipe_id = ?', whereArgs: [recipe.id]);
+        where: 'recipe_id = ?', whereArgs: [resolved.id]);
     await db.delete('recipe_steps',
-        where: 'recipe_id = ?', whereArgs: [recipe.id]);
+        where: 'recipe_id = ?', whereArgs: [resolved.id]);
     await db.delete('recipe_images',
-        where: 'recipe_id = ?', whereArgs: [recipe.id]);
+        where: 'recipe_id = ?', whereArgs: [resolved.id]);
 
-    for (final ingredient in recipe.ingredients) {
+    for (final ingredient in resolved.ingredients) {
       await db.insert(
           'recipe_ingredients', withSync(ingredient.toMap(), _uid));
     }
-    for (final step in recipe.steps) {
+    for (final step in resolved.steps) {
       await db.insert('recipe_steps', withSync(step.toMap(), _uid));
     }
-    for (final imagePath in recipe.imagePaths) {
+    for (final imagePath in resolved.imagePaths) {
       await db.insert('recipe_images', withSync({
         'id': _uuid.v4(),
-        'recipe_id': recipe.id,
+        'recipe_id': resolved.id,
         'image_path': imagePath,
       }, _uid));
     }
+    ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
+  }
+
+  Future<void> rateRecipe(String id, int rating) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.update(
+      'recipes',
+      withSync({'rating': rating}, _uid),
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
+  }
+
+  Future<void> markCooked(String id) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.insert('recipe_cookings', withSync({
+      'id': _uuid.v4(),
+      'recipe_id': id,
+      'cooked_at': DateTime.now().toIso8601String(),
+    }, _uid));
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();
   }
