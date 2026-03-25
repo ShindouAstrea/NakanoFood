@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import '../providers/recipe_provider.dart';
 import '../models/recipe.dart';
+import '../services/recipe_share_service.dart';
 import 'add_edit_recipe_screen.dart';
 
 
@@ -77,6 +79,11 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                 : Container(color: theme.colorScheme.primary),
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.share_outlined, color: Colors.white),
+              tooltip: 'Compartir receta',
+              onPressed: () => _showShareSheet(context, recipe),
+            ),
             IconButton(
               icon: const Icon(Icons.edit_outlined, color: Colors.white),
               onPressed: () => Navigator.push(
@@ -312,6 +319,168 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
         ),
       ],
     );
+  }
+
+  void _showShareSheet(BuildContext context, Recipe recipe) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.tag_rounded),
+              title: const Text('Compartir con código'),
+              subtitle: const Text('Genera un código de 6 caracteres'),
+              onTap: () {
+                Navigator.pop(context);
+                _shareWithCode(context, recipe);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_outlined),
+              title: const Text('Compartir como texto'),
+              subtitle: const Text('Por WhatsApp u otras apps'),
+              onTap: () {
+                Navigator.pop(context);
+                _shareAsText(recipe);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareWithCode(BuildContext context, Recipe recipe) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Generando código...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final code = await RecipeShareService.shareRecipe(recipe);
+      if (!context.mounted) return;
+      Navigator.pop(context); // cierra loading
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Código generado'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Comparte este código para que otros importen la receta:'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  code,
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 8,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Válido por 30 días',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cerrar'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.share_outlined, size: 18),
+              label: const Text('Compartir'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Share.share(
+                  'Te comparto la receta "${recipe.name}" en NakanoFood 🍽️\n\nCódigo: $code\n\nÁbrela desde Recetas → Importar receta.',
+                  subject: recipe.name,
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error al generar el código. ¿Tienes conexión?')),
+      );
+    }
+  }
+
+  void _shareAsText(Recipe recipe) {
+    final buf = StringBuffer();
+
+    buf.writeln('🍽️ *${recipe.name}*');
+
+    final meta = <String>[];
+    if (recipe.type.isNotEmpty) meta.add('📂 ${recipe.type}');
+    if (recipe.totalTime > 0) meta.add('⏱️ ${recipe.totalTime} min');
+    meta.add('👥 ${(recipe.portions * _portionMultiplier).toStringAsFixed(_portionMultiplier == 0.5 ? 1 : 0)} porciones');
+    buf.writeln(meta.join('  |  '));
+
+    if (recipe.description != null) {
+      buf.writeln();
+      buf.writeln('📝 *Descripción*');
+      buf.writeln(recipe.description);
+    }
+
+    if (recipe.ingredients.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('🛒 *Ingredientes*');
+      for (final ing in recipe.ingredients) {
+        final qty = ing.quantity * _portionMultiplier;
+        final qtyStr = qty == qty.roundToDouble()
+            ? qty.toInt().toString()
+            : qty.toStringAsFixed(1);
+        buf.writeln('• ${ing.productName}: $qtyStr ${ing.unit}');
+      }
+    }
+
+    if (recipe.steps.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('👨‍🍳 *Preparación*');
+      for (final step in recipe.steps) {
+        buf.writeln('${step.stepNumber}. ${step.description}');
+      }
+    }
+
+    if (recipe.notes != null) {
+      buf.writeln();
+      buf.writeln('📌 *Notas*');
+      buf.writeln(recipe.notes);
+    }
+
+    buf.writeln();
+    buf.write('Compartido desde NakanoFood 🥗');
+
+    Share.share(buf.toString(), subject: recipe.name);
   }
 
   Future<void> _confirmDelete(

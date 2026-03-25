@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/recipe_provider.dart';
 import '../models/recipe.dart';
+import '../services/recipe_share_service.dart';
 import '../widgets/recipe_card.dart';
 import 'add_edit_recipe_screen.dart';
 import 'recipe_detail_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/skeletons/recipe_card_skeleton.dart';
 
-class RecipesScreen extends ConsumerWidget {
+class RecipesScreen extends ConsumerStatefulWidget {
   const RecipesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecipesScreen> createState() => _RecipesScreenState();
+}
+
+class _RecipesScreenState extends ConsumerState<RecipesScreen> {
+  @override
+  Widget build(BuildContext context) {
     final recipesAsync = ref.watch(filteredRecipesProvider);
     final typeFilter = ref.watch(recipeTypeFilterProvider);
     ref.watch(recipeSearchProvider);
@@ -20,6 +26,13 @@ class RecipesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recetas'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Importar receta',
+            onPressed: () => _showImportDialog(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -115,5 +128,96 @@ class RecipesScreen extends ConsumerWidget {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  void _showImportDialog(BuildContext context) {
+    final codeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Importar receta'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ingresa el código de 6 caracteres que te compartieron:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              maxLength: 6,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 6,
+              ),
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                hintText: 'ABC123',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final code = codeController.text.trim();
+              if (code.length != 6) return;
+              Navigator.pop(ctx);
+              await _importRecipe(context, code);
+            },
+            child: const Text('Importar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _importRecipe(BuildContext context, String code) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Buscando receta...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final recipe = await RecipeShareService.importByCode(code);
+      if (!context.mounted) return;
+      Navigator.pop(context);
+
+      if (recipe == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Código no encontrado o expirado.')),
+        );
+        return;
+      }
+
+      await ref.read(recipesProvider.notifier).addRecipe(recipe);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('¡"${recipe.name}" importada correctamente!')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error al importar. ¿Tienes conexión?')),
+      );
+    }
   }
 }

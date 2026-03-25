@@ -35,8 +35,6 @@ class NakanoFoodApp extends ConsumerWidget {
   }
 }
 
-/// Muestra el SplashScreen un mínimo de 2.5 s y luego navega según el estado
-/// de autenticación.
 class _AuthGate extends ConsumerStatefulWidget {
   const _AuthGate();
 
@@ -61,7 +59,6 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
 
     if (!SupabaseConfig.isConfigured) return const MainNavigation();
 
-    ref.watch(authStateProvider);
     final user = ref.watch(currentUserProvider);
     if (user != null) return const MainNavigation();
     return const LoginScreen();

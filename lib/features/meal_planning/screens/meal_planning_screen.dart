@@ -114,12 +114,14 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
             child: mealsForDayAsync.when(
               data: (meals) {
                 if (meals.isEmpty) {
-                  return EmptyState(
-                    icon: Icons.no_meals_outlined,
-                    title: 'Sin comidas planificadas',
-                    subtitle: 'Toca "Agregar" para planificar una comida',
-                    actionLabel: 'Agregar comida',
-                    onAction: () => _addMeal(context),
+                  return SingleChildScrollView(
+                    child: EmptyState(
+                      icon: Icons.no_meals_outlined,
+                      title: 'Sin comidas planificadas',
+                      subtitle: 'Toca "Agregar" para planificar una comida',
+                      actionLabel: 'Agregar comida',
+                      onAction: () => _addMeal(context),
+                    ),
                   );
                 }
                 return ListView.builder(

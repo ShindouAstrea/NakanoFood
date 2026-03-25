@@ -12,7 +12,7 @@ final themeModeProvider =
 class ThemeModeNotifier extends StateNotifier<ThemeMode> {
   static const _key = 'theme_mode';
 
-  ThemeModeNotifier() : super(ThemeMode.system) {
+  ThemeModeNotifier() : super(ThemeMode.light) {
     _load();
   }
 
@@ -69,7 +69,7 @@ final accentColorProvider =
 
 class AccentColorNotifier extends StateNotifier<Color> {
   static const _key = 'accent_color';
-  static const _defaultColor = Color(0xFF2E7D32);
+  static const _defaultColor = Color(0xFF1565C0);
 
   AccentColorNotifier() : super(_defaultColor) {
     _load();
