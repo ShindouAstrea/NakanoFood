@@ -22,7 +22,7 @@ class DatabaseHelper {
         : join(await getDatabasesPath(), filePath);
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -115,6 +115,17 @@ class DatabaseHelper {
           user_id TEXT,
           synced_at TEXT,
           FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 9) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_deletes (
+          id TEXT PRIMARY KEY,
+          table_name TEXT NOT NULL,
+          record_id TEXT NOT NULL,
+          user_id TEXT,
+          deleted_at TEXT NOT NULL
         )
       ''');
     }
@@ -421,6 +432,16 @@ class DatabaseHelper {
         user_id TEXT,
         synced_at TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE pending_deletes (
+        id TEXT PRIMARY KEY,
+        table_name TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        user_id TEXT,
+        deleted_at TEXT NOT NULL
       )
     ''');
 

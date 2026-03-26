@@ -18,7 +18,10 @@ final categoriesProvider =
 
 class CategoriesNotifier extends AsyncNotifier<List<ProductCategory>> {
   @override
-  Future<List<ProductCategory>> build() => _loadCategories();
+  Future<List<ProductCategory>> build() {
+    ref.watch(syncCompletionCountProvider);
+    return _loadCategories();
+  }
 
   String? get _uid => ref.read(currentUserIdProvider);
 
@@ -68,6 +71,7 @@ class CategoriesNotifier extends AsyncNotifier<List<ProductCategory>> {
 
   Future<void> deleteCategory(String id) async {
     final db = await DatabaseHelper.instance.database;
+    await ref.read(syncServiceProvider).recordDeletion('product_categories', id);
     await db.delete('product_categories', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();
@@ -83,7 +87,10 @@ final productsProvider =
 
 class ProductsNotifier extends AsyncNotifier<List<Product>> {
   @override
-  Future<List<Product>> build() => _loadProducts();
+  Future<List<Product>> build() {
+    ref.watch(syncCompletionCountProvider);
+    return _loadProducts();
+  }
 
   String? get _uid => ref.read(currentUserIdProvider);
 
@@ -189,6 +196,7 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
 
   Future<void> deleteProduct(String id) async {
     final db = await DatabaseHelper.instance.database;
+    await ref.read(syncServiceProvider).recordDeletion('products', id);
     await db.delete('products', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();

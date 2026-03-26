@@ -19,7 +19,10 @@ final mealCategoriesProvider =
 
 class MealCategoriesNotifier extends AsyncNotifier<List<MealCategory>> {
   @override
-  Future<List<MealCategory>> build() => _load();
+  Future<List<MealCategory>> build() {
+    ref.watch(syncCompletionCountProvider);
+    return _load();
+  }
 
   String? get _uid => ref.read(currentUserIdProvider);
 
@@ -75,6 +78,7 @@ class MealCategoriesNotifier extends AsyncNotifier<List<MealCategory>> {
 
   Future<void> deleteCategory(String id) async {
     final db = await DatabaseHelper.instance.database;
+    await ref.read(syncServiceProvider).recordDeletion('meal_categories', id);
     await db.delete('meal_categories', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();
@@ -95,7 +99,10 @@ final mealPlansProvider =
 
 class MealPlansNotifier extends AsyncNotifier<List<MealPlan>> {
   @override
-  Future<List<MealPlan>> build() => _loadAll();
+  Future<List<MealPlan>> build() {
+    ref.watch(syncCompletionCountProvider);
+    return _loadAll();
+  }
 
   String? get _uid => ref.read(currentUserIdProvider);
 
@@ -155,6 +162,7 @@ class MealPlansNotifier extends AsyncNotifier<List<MealPlan>> {
 
   Future<void> deleteMealPlan(String id) async {
     final db = await DatabaseHelper.instance.database;
+    await ref.read(syncServiceProvider).recordDeletion('meal_plans', id);
     await db.delete('meal_plans', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();

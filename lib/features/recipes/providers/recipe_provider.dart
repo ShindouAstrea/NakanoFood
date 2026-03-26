@@ -15,7 +15,10 @@ final recipesProvider =
 
 class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
   @override
-  Future<List<Recipe>> build() => _loadRecipes();
+  Future<List<Recipe>> build() {
+    ref.watch(syncCompletionCountProvider);
+    return _loadRecipes();
+  }
 
   String? get _uid => ref.read(currentUserIdProvider);
 
@@ -212,6 +215,7 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
 
   Future<void> deleteRecipe(String id) async {
     final db = await DatabaseHelper.instance.database;
+    await ref.read(syncServiceProvider).recordDeletion('recipes', id);
     await db.delete('recipes', where: 'id = ?', whereArgs: [id]);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();

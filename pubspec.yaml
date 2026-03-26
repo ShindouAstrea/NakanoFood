@@ -3,7 +3,7 @@ description: NakanoFood - Gestión de despensa, recetas y planificación aliment
 
 publish_to: 'none'
 
-version: 2.2.1+4
+version: 2.2.2+5
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

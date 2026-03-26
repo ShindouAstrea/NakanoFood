@@ -69,16 +69,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    // Trigger sync after successful login
-    if (authState.value != null) {
-      final sync = ref.read(syncServiceProvider);
-      if (_isRegister) {
-        // New account: upload local data
-        sync.fullUpload();
-      } else {
-        // Existing account: download from cloud
-        sync.fullDownload();
-      }
+    // Nueva cuenta: subir datos locales al cloud.
+    // Login existente: la descarga la maneja _AuthGate al detectar el evento signedIn.
+    if (authState.value != null && _isRegister) {
+      ref.read(syncServiceProvider).fullUpload();
     }
   }
 

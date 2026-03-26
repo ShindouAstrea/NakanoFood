@@ -16,7 +16,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<Offset> _slideAnim;
   late Animation<double> _loaderAnim;
 
-  static const String _appVersion = '2.0.1';
+  static const String _appVersion = '2.2.2';
 
   @override
   void initState() {

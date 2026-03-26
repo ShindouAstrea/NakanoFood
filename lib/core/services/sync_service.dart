@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../config/supabase_config.dart';
 import '../database/database_helper.dart';
 import '../providers/auth_provider.dart';
@@ -20,6 +21,14 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 enum SyncStatus { idle, syncing, error }
 
 final syncStatusProvider = StateProvider<SyncStatus>((ref) => SyncStatus.idle);
+
+/// `true` mientras corre el primer fullDownload tras iniciar sesión.
+/// `_AuthGate` lo usa para mostrar la pantalla de carga bloqueante.
+final initialSyncProvider = StateProvider<bool>((ref) => false);
+
+/// Se incrementa cada vez que fullDownload o fullUpload completan con éxito.
+/// Los providers de datos lo observan para auto-refrescarse tras un sync manual.
+final syncCompletionCountProvider = StateProvider<int>((ref) => 0);
 
 // ─── SyncService ──────────────────────────────────────────────────────────────
 
@@ -61,6 +70,24 @@ class SyncService {
     _runSync();
   }
 
+  /// Record a deletion locally so it can be synced to Supabase.
+  /// Call this BEFORE deleting the row from SQLite.
+  Future<void> recordDeletion(String table, String recordId) async {
+    if (userId == null) return;
+    final db = await DatabaseHelper.instance.database;
+    await db.insert(
+      'pending_deletes',
+      {
+        'id': const Uuid().v4(),
+        'table_name': table,
+        'record_id': recordId,
+        'user_id': userId,
+        'deleted_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   /// Full upload: push all local rows to Supabase (used after login).
   Future<void> fullUpload() async {
     if (userId == null || !SupabaseConfig.isConfigured) return;
@@ -70,11 +97,13 @@ class SyncService {
     try {
       final db = await DatabaseHelper.instance.database;
       await _claimLocalRecords(db, userId!);
+      await _syncDeletions(db, userId!);
       await _uploadPendingImages(db, userId!);
       for (final table in _uploadOrder) {
         await _uploadTable(db, table, userId!);
       }
       ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
+      ref.read(syncCompletionCountProvider.notifier).update((v) => v + 1);
     } catch (e, st) {
       debugPrint('[SyncService] fullUpload error: $e\n$st');
       ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
@@ -89,14 +118,16 @@ class SyncService {
     ref.read(syncStatusProvider.notifier).state = SyncStatus.syncing;
     try {
       final db = await DatabaseHelper.instance.database;
-      // Download in FK order
       for (final table in _uploadOrder) {
         await _downloadTable(db, table, userId!);
       }
       ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
+      ref.read(syncCompletionCountProvider.notifier).update((v) => v + 1);
     } catch (e, st) {
       debugPrint('[SyncService] fullDownload error: $e\n$st');
       ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
+    } finally {
+      ref.read(initialSyncProvider.notifier).state = false;
     }
   }
 
@@ -107,15 +138,58 @@ class SyncService {
     final online = await _isOnline();
     if (!online) return;
     ref.read(syncStatusProvider.notifier).state = SyncStatus.syncing;
+    bool hasError = false;
     try {
       final db = await DatabaseHelper.instance.database;
+      await _syncDeletions(db, userId!);
       for (final table in _uploadOrder) {
-        await _uploadPending(db, table, userId!);
+        try {
+          await _uploadPending(db, table, userId!);
+        } catch (e) {
+          debugPrint('[SyncService] _runSync error on table $table: $e');
+          hasError = true;
+        }
       }
-      ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
     } catch (e, st) {
       debugPrint('[SyncService] _runSync error: $e\n$st');
-      ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
+      hasError = true;
+    }
+    ref.read(syncStatusProvider.notifier).state =
+        hasError ? SyncStatus.error : SyncStatus.idle;
+  }
+
+  /// Sync pending local deletions to Supabase.
+  Future<void> _syncDeletions(Database db, String uid) async {
+    List<Map<String, dynamic>> pending;
+    try {
+      pending = await db.query(
+        'pending_deletes',
+        where: 'user_id = ?',
+        whereArgs: [uid],
+      );
+    } catch (_) {
+      return;
+    }
+    if (pending.isEmpty) return;
+
+    for (final row in pending) {
+      final table = row['table_name'] as String;
+      final recordId = row['record_id'] as String;
+      final deleteId = row['id'] as String;
+      try {
+        await _client
+            .from(table)
+            .delete()
+            .eq('id', recordId)
+            .eq('user_id', uid);
+        await db.delete(
+          'pending_deletes',
+          where: 'id = ?',
+          whereArgs: [deleteId],
+        );
+      } catch (e) {
+        debugPrint('[SyncService] delete sync error for $table/$recordId: $e');
+      }
     }
   }
 
@@ -230,6 +304,7 @@ class SyncService {
   }
 
   /// Download all rows from Supabase and upsert into local DB.
+  /// Also removes local rows that no longer exist remotely (deleted on another device).
   Future<void> _downloadTable(
       Database db, String table, String uid) async {
     final List<dynamic> rows;
@@ -238,10 +313,29 @@ class SyncService {
     } catch (_) {
       return; // table might not exist in Supabase yet
     }
+
+    // Delete local rows whose IDs are not in the remote set
+    if (await _hasColumn(db, table, 'user_id')) {
+      final remoteIds =
+          rows.map((r) => (r as Map)['id'] as String).toSet();
+      final localRows = await db.query(
+        table,
+        columns: ['id'],
+        where: 'user_id = ?',
+        whereArgs: [uid],
+      );
+      for (final row in localRows) {
+        final localId = row['id'] as String;
+        if (!remoteIds.contains(localId)) {
+          await db.delete(table, where: 'id = ?', whereArgs: [localId]);
+        }
+      }
+    }
+
+    final now = DateTime.now().toIso8601String();
     for (final row in rows) {
       final map = Map<String, dynamic>.from(row as Map);
-      // Mark as synced locally
-      map['synced_at'] = DateTime.now().toIso8601String();
+      map['synced_at'] = now;
       try {
         await db.insert(
           table,

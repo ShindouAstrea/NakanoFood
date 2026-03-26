@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/supabase_config.dart';
 import 'core/providers/auth_provider.dart';
+import 'core/services/sync_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -59,9 +61,63 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
 
     if (!SupabaseConfig.isConfigured) return const MainNavigation();
 
+    // Dispara fullDownload al iniciar sesión (email o Google) en cualquier dispositivo.
+    // Se filtra solo el evento signedIn para no re-descargar en cada reinicio de app.
+    ref.listen(authStateProvider, (_, next) {
+      next.whenData((authState) {
+        if (authState.event == AuthChangeEvent.signedIn) {
+          ref.read(initialSyncProvider.notifier).state = true;
+          ref.read(syncServiceProvider).fullDownload();
+        }
+      });
+    });
+
     final user = ref.watch(currentUserProvider);
-    if (user != null) return const MainNavigation();
+    final isInitialSyncing = ref.watch(initialSyncProvider);
+
+    if (user != null) {
+      if (isInitialSyncing) return const _InitialSyncScreen();
+      return const MainNavigation();
+    }
     return const LoginScreen();
+  }
+}
+
+class _InitialSyncScreen extends StatelessWidget {
+  const _InitialSyncScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_download_outlined, size: 64, color: cs.primary),
+            const SizedBox(height: 24),
+            Text('Sincronizando tus datos',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(
+              'Esto puede tomar unos segundos...',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: cs.onSurface.withAlpha(140)),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 180,
+              child: LinearProgressIndicator(
+                backgroundColor: cs.surfaceContainerHighest,
+                minHeight: 2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
