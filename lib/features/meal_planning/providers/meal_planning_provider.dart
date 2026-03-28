@@ -111,7 +111,8 @@ class MealPlansNotifier extends AsyncNotifier<List<MealPlan>> {
     final maps = await db.rawQuery('''
       SELECT mp.*,
              mc.name as category_name,
-             mc.color as category_color
+             mc.color as category_color,
+             mc.default_time as category_default_time
       FROM meal_plans mp
       LEFT JOIN meal_categories mc ON mp.category_id = mc.id
       ORDER BY mp.date ASC, mc.default_time ASC

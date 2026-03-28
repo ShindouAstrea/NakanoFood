@@ -5,6 +5,7 @@ import '../models/recipe.dart';
 import '../models/recipe_suggestion.dart';
 import '../providers/explore_recipes_provider.dart';
 import '../providers/recipe_provider.dart';
+import '../../../shared/widgets/skeletons/shimmer_box.dart';
 
 const _uuid = Uuid();
 
@@ -73,8 +74,7 @@ class ExploreRecipesScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          // Banner "Próximamente"
-          _AiBanner(),
+          _AiBanner(isLoading: suggestionsAsync.isLoading),
 
           // Filtro por tipo
           SizedBox(
@@ -161,37 +161,55 @@ class ExploreRecipesScreen extends ConsumerWidget {
   }
 }
 
-// ── Banner IA próximamente ───────────────────────────────────────────────────
+// ── Banner IA ────────────────────────────────────────────────────────────────
 
 class _AiBanner extends StatelessWidget {
+  final bool isLoading;
+  const _AiBanner({required this.isLoading});
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.tertiary.withAlpha(20),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.tertiary.withAlpha(60)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.auto_awesome_rounded,
-              size: 18, color: colorScheme.tertiary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Las recomendaciones con IA estarán disponibles próximamente. '
-              'Por ahora se muestran recetas populares de muestra.',
-              style: TextStyle(
-                fontSize: 12,
-                color: colorScheme.onSurface.withAlpha(160),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        key: ValueKey(isLoading),
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: colorScheme.tertiary.withAlpha(isLoading ? 30 : 20),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.tertiary.withAlpha(60)),
+        ),
+        child: Row(
+          children: [
+            if (isLoading)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colorScheme.tertiary,
+                ),
+              )
+            else
+              Icon(Icons.auto_awesome_rounded,
+                  size: 18, color: colorScheme.tertiary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isLoading
+                    ? 'Consultando IA, generando recomendaciones...'
+                    : 'Recomendaciones personalizadas generadas con IA según tus recetas guardadas.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurface.withAlpha(isLoading ? 200 : 160),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -204,17 +222,66 @@ class _LoadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 8),
-      itemCount: 6,
-      itemBuilder: (_, __) => Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        height: 110,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest.withAlpha(80),
-          borderRadius: BorderRadius.circular(12),
-        ),
+      padding: const EdgeInsets.only(top: 8, bottom: 80),
+      itemCount: 5,
+      itemBuilder: (_, __) => const _SkeletonCard(),
+    );
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Imagen skeleton
+          const ShimmerBox(width: double.infinity, height: 130, borderRadius: 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Título + tipo chip
+                const Row(
+                  children: [
+                    ShimmerBox(width: 160, height: 14, borderRadius: 6),
+                    Spacer(),
+                    ShimmerBox(width: 60, height: 22, borderRadius: 20),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Descripción línea 1
+                const ShimmerBox(
+                    width: double.infinity, height: 11, borderRadius: 6),
+                const SizedBox(height: 6),
+                // Descripción línea 2
+                ShimmerBox(
+                  width: MediaQuery.of(context).size.width * 0.55,
+                  height: 11,
+                  borderRadius: 6,
+                ),
+                const SizedBox(height: 12),
+                // Chips + botón
+                const Row(
+                  children: [
+                    ShimmerBox(width: 70, height: 14, borderRadius: 6),
+                    SizedBox(width: 12),
+                    ShimmerBox(width: 60, height: 14, borderRadius: 6),
+                    Spacer(),
+                    ShimmerBox(width: 72, height: 30, borderRadius: 20),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -252,12 +319,30 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
     try {
       final s = widget.suggestion;
       final now = DateTime.now();
+      final recipeId = _uuid.v4();
+      final ingredients = s.ingredients
+          .map((i) => RecipeIngredient(
+                id: _uuid.v4(),
+                recipeId: recipeId,
+                productName: i.name,
+                quantity: i.quantity,
+                unit: i.unit,
+              ))
+          .toList();
+      final steps = s.steps
+          .map((st) => RecipeStep(
+                id: _uuid.v4(),
+                recipeId: recipeId,
+                stepNumber: st.step,
+                description: st.description,
+              ))
+          .toList();
       final recipe = Recipe(
-        id: _uuid.v4(),
+        id: recipeId,
         name: s.name,
         type: s.type,
         description: s.description,
-        portions: 1,
+        portions: 2,
         prepTime: s.estimatedMinutes != null
             ? (s.estimatedMinutes! ~/ 2)
             : null,
@@ -265,6 +350,9 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             ? (s.estimatedMinutes! - s.estimatedMinutes! ~/ 2)
             : null,
         notes: s.reason,
+        mainImagePath: s.imageUrl,
+        ingredients: ingredients,
+        steps: steps,
         createdAt: now,
         updatedAt: now,
       );
@@ -307,128 +395,177 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _showDetail(context),
-        child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Nombre + tipo
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    s.name,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
+            // Imagen de referencia
+            if (s.imageUrl != null)
+              Image.network(
+                s.imageUrl!,
+                height: 130,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                frameBuilder: (_, child, frame, __) => AnimatedOpacity(
+                  opacity: frame == null ? 0 : 1,
+                  duration: const Duration(milliseconds: 350),
+                  child: child,
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withAlpha(18),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    s.type,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            // Descripción
-            Text(
-              s.description,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withAlpha(160),
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 10),
 
-            // Meta + botón agregar
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 4,
+            // Contenido
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nombre + tipo
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (s.estimatedMinutes != null)
-                        _Chip(
-                          icon: Icons.timer_outlined,
-                          label: '${s.estimatedMinutes} min',
-                          color: colorScheme.onSurface.withAlpha(130),
+                      Expanded(
+                        child: Text(
+                          s.name,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                      if (s.difficulty != null)
-                        _Chip(
-                          icon: Icons.bar_chart_rounded,
-                          label: s.difficulty!,
-                          color: _difficultyColor(s.difficulty!, colorScheme),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withAlpha(18),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                      if (s.reason != null)
-                        _Chip(
-                          icon: Icons.auto_awesome_rounded,
-                          label: s.reason!,
-                          color: colorScheme.tertiary.withAlpha(180),
+                        child: Text(
+                          s.type,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(height: 6),
 
-                // Botón agregar / guardada
-                _saved
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
+                  // Descripción
+                  Text(
+                    s.description,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withAlpha(160),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Indicador ingredientes + pasos
+                  if (s.ingredients.isNotEmpty || s.steps.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
                         children: [
-                          Icon(Icons.check_circle_rounded,
-                              size: 16,
+                          Icon(Icons.check_circle_outline_rounded,
+                              size: 13,
                               color: Colors.green.shade600),
                           const SizedBox(width: 4),
                           Text(
-                            'Guardada',
+                            [
+                              if (s.ingredients.isNotEmpty)
+                                '${s.ingredients.length} ingredientes',
+                              if (s.steps.isNotEmpty)
+                                '${s.steps.length} pasos',
+                            ].join(' · '),
                             style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
                               color: Colors.green.shade600,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
-                      )
-                    : FilledButton.tonal(
-                        onPressed: _loading ? null : _add,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: _loading
-                            ? SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: colorScheme.onSecondaryContainer,
-                                ),
-                              )
-                            : const Text('Agregar',
-                                style: TextStyle(fontSize: 12)),
                       ),
-              ],
+                    ),
+
+                  // Meta + botón agregar
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 4,
+                          children: [
+                            if (s.estimatedMinutes != null)
+                              _Chip(
+                                icon: Icons.timer_outlined,
+                                label: '${s.estimatedMinutes} min',
+                                color: colorScheme.onSurface.withAlpha(130),
+                              ),
+                            if (s.difficulty != null)
+                              _Chip(
+                                icon: Icons.bar_chart_rounded,
+                                label: s.difficulty!,
+                                color:
+                                    _difficultyColor(s.difficulty!, colorScheme),
+                              ),
+                            if (s.reason != null)
+                              _Chip(
+                                icon: Icons.auto_awesome_rounded,
+                                label: s.reason!,
+                                color: colorScheme.tertiary.withAlpha(180),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Botón agregar / guardada
+                      _saved
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded,
+                                    size: 16, color: Colors.green.shade600),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Guardada',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green.shade600,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : FilledButton.tonal(
+                              onPressed: _loading ? null : _add,
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: _loading
+                                  ? SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color:
+                                            colorScheme.onSecondaryContainer,
+                                      ),
+                                    )
+                                  : const Text('Agregar',
+                                      style: TextStyle(fontSize: 12)),
+                            ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
         ),
       ),
     );
@@ -477,7 +614,13 @@ class _Chip extends StatelessWidget {
       children: [
         Icon(icon, size: 13, color: color),
         const SizedBox(width: 3),
-        Text(label, style: TextStyle(fontSize: 11, color: color)),
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 11, color: color),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -504,9 +647,12 @@ class _SuggestionDetailSheet extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final s = suggestion;
 
+    final hasContent =
+        suggestion.ingredients.isNotEmpty || suggestion.steps.isNotEmpty;
+
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.6,
+      initialChildSize: hasContent ? 0.85 : 0.6,
       minChildSize: 0.4,
       maxChildSize: 0.92,
       builder: (_, scrollController) => Column(
@@ -527,170 +673,236 @@ class _SuggestionDetailSheet extends StatelessWidget {
           Expanded(
             child: ListView(
               controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+              padding: EdgeInsets.zero,
               children: [
-                // Nombre
-                Text(
-                  s.name,
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 10),
-
-                // Chips de meta
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    _DetailChip(
-                      icon: Icons.restaurant_menu_rounded,
-                      label: s.type,
-                      color: colorScheme.primary,
-                      background: colorScheme.primary.withAlpha(20),
+                // Imagen
+                if (s.imageUrl != null)
+                  Image.network(
+                    s.imageUrl!,
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    frameBuilder: (_, child, frame, __) => AnimatedOpacity(
+                      opacity: frame == null ? 0 : 1,
+                      duration: const Duration(milliseconds: 350),
+                      child: child,
                     ),
-                    if (s.estimatedMinutes != null)
-                      _DetailChip(
-                        icon: Icons.timer_outlined,
-                        label: '${s.estimatedMinutes} min',
-                        color: colorScheme.onSurface.withAlpha(160),
-                        background:
-                            colorScheme.onSurface.withAlpha(15),
-                      ),
-                    if (s.difficulty != null)
-                      _DetailChip(
-                        icon: Icons.bar_chart_rounded,
-                        label: s.difficulty!,
-                        color: _difficultyColor(s.difficulty!, colorScheme),
-                        background:
-                            _difficultyColor(s.difficulty!, colorScheme)
-                                .withAlpha(20),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Descripción
-                Text('Descripción',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Text(
-                  s.description,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurface.withAlpha(180),
-                    height: 1.5,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                   ),
-                ),
 
-                // Razón IA
-                if (s.reason != null) ...[
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.tertiary.withAlpha(20),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: colorScheme.tertiary.withAlpha(60)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.auto_awesome_rounded,
-                            size: 16, color: colorScheme.tertiary),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            s.reason!,
-                            style: theme.textTheme.bodySmall?.copyWith(
+                // Contenido
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Nombre
+                      Text(
+                        s.name,
+                        style: theme.textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Chips de meta
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _DetailChip(
+                            icon: Icons.restaurant_menu_rounded,
+                            label: s.type,
+                            color: colorScheme.primary,
+                            background: colorScheme.primary.withAlpha(20),
+                          ),
+                          if (s.estimatedMinutes != null)
+                            _DetailChip(
+                              icon: Icons.timer_outlined,
+                              label: '${s.estimatedMinutes} min',
                               color: colorScheme.onSurface.withAlpha(160),
+                              background: colorScheme.onSurface.withAlpha(15),
                             ),
+                          if (s.difficulty != null)
+                            _DetailChip(
+                              icon: Icons.bar_chart_rounded,
+                              label: s.difficulty!,
+                              color: _difficultyColor(s.difficulty!, colorScheme),
+                              background: _difficultyColor(s.difficulty!, colorScheme)
+                                  .withAlpha(20),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Descripción
+                      Text('Descripción',
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      Text(
+                        s.description,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurface.withAlpha(180),
+                          height: 1.5,
+                        ),
+                      ),
+
+                      // Razón IA
+                      if (s.reason != null) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.tertiary.withAlpha(20),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: colorScheme.tertiary.withAlpha(60)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.auto_awesome_rounded,
+                                  size: 16, color: colorScheme.tertiary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  s.reason!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurface.withAlpha(160),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ],
 
-                // Ingredientes y pasos (placeholder IA)
-                const SizedBox(height: 24),
-                Text('Ingredientes y preparación',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest
-                        .withAlpha(80),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: colorScheme.outline.withAlpha(40)),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(Icons.auto_awesome_outlined,
-                          size: 32,
-                          color: colorScheme.onSurface.withAlpha(60)),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Disponible cuando la IA esté conectada',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withAlpha(100),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Si agregas la receta ahora, podrás completar los ingredientes y pasos manualmente.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          color: colorScheme.onSurface.withAlpha(80),
-                        ),
-                      ),
+                      // Ingredientes
+                      if (s.ingredients.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Text('Ingredientes',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        ...s.ingredients.map((i) => Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.fiber_manual_record,
+                                      size: 6,
+                                      color: colorScheme.primary),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      i.name,
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${i.quantity % 1 == 0 ? i.quantity.toInt() : i.quantity} ${i.unit}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color:
+                                          colorScheme.onSurface.withAlpha(150),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                      ],
+
+                      // Pasos
+                      if (s.steps.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Text('Preparación',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        ...s.steps.map((st) => Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          colorScheme.primary.withAlpha(18),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '${st.step}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      st.description,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurface
+                                            .withAlpha(180),
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                      ],
+
+                      const SizedBox(height: 24),
+
+                      // Botón agregar
+                      saved
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_circle_rounded,
+                                    color: Colors.green.shade600),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Ya está en tus recetas',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green.shade600,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : FilledButton.icon(
+                              onPressed: loading
+                                  ? null
+                                  : () {
+                                      onAdd();
+                                      Navigator.pop(context);
+                                    },
+                              icon: loading
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white),
+                                    )
+                                  : const Icon(Icons.add_rounded),
+                              label: const Text('Agregar a mis recetas'),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 48),
+                              ),
+                            ),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Botón agregar
-                saved
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle_rounded,
-                              color: Colors.green.shade600),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Ya está en tus recetas',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green.shade600,
-                            ),
-                          ),
-                        ],
-                      )
-                    : FilledButton.icon(
-                        onPressed: loading ? null : () {
-                          onAdd();
-                          Navigator.pop(context);
-                        },
-                        icon: loading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white),
-                              )
-                            : const Icon(Icons.add_rounded),
-                        label: const Text('Agregar a mis recetas'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                      ),
               ],
             ),
           ),

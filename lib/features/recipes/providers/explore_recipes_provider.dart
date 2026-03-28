@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pantry/providers/pantry_provider.dart';
 import '../models/recipe_suggestion.dart';
 import '../models/recipe.dart';
 import '../providers/recipe_provider.dart';
@@ -18,14 +19,12 @@ class ExploreSuggestionsNotifier
 
   Future<List<RecipeSuggestion>> _fetch() async {
     final typeFilter = ref.watch(exploreTypeFilterProvider);
-    final recipesAsync = ref.watch(recipesProvider);
-    final existingNames = recipesAsync.valueOrNull
-            ?.map((Recipe r) => r.name)
-            .toList() ??
-        [];
+    final recipes = ref.watch(recipesProvider).valueOrNull ?? <Recipe>[];
+    final products = ref.watch(productsProvider).valueOrNull ?? [];
 
     return RecipeExploreService.getSuggestions(
-      existingRecipeNames: existingNames,
+      savedRecipes: recipes,
+      pantryProducts: products,
       typeFilter: typeFilter,
     );
   }

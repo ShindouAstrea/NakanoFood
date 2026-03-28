@@ -20,6 +20,7 @@ class PantryScreen extends ConsumerStatefulWidget {
 class _PantryScreenState extends ConsumerState<PantryScreen>
     with SingleTickerProviderStateMixin {
   bool _fabOpen = false;
+  bool _isGrid = false;
   late AnimationController _animCtrl;
   late Animation<double> _expandAnim;
 
@@ -67,6 +68,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
     final selectedCategory = ref.watch(pantryFilterProvider);
     ref.watch(pantrySearchProvider);
     final lowStockAsync = ref.watch(lowStockProductsProvider);
+    final lowStockOnly = ref.watch(pantryLowStockFilterProvider);
     final activeSession = ref.watch(activeSessionProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -74,6 +76,11 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
       appBar: AppBar(
         title: const Text('Despensa'),
         actions: [
+          IconButton(
+            icon: Icon(_isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded),
+            tooltip: _isGrid ? 'Vista lista' : 'Vista cuadrícula',
+            onPressed: () => setState(() => _isGrid = !_isGrid),
+          ),
           activeSession.when(
             data: (session) => session != null
                 ? Stack(
@@ -156,23 +163,39 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                         },
                       ),
                     ),
-                    ...categories.map((cat) => Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: Text(cat.name),
-                            selected: selectedCategory == cat.id,
-                            selectedColor:
-                                _parseColor(cat.color).withAlpha(60),
-                            onSelected: (_) {
-                              _closeFab();
-                              ref
-                                  .read(pantryFilterProvider.notifier)
-                                  .state = selectedCategory == cat.id
-                                  ? null
-                                  : cat.id;
-                            },
-                          ),
-                        )),
+                    ...categories.map((cat) {
+                          final catColor = _parseColor(cat.color);
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: FilterChip(
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.only(right: 5),
+                                    decoration: BoxDecoration(
+                                      color: catColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  Text(cat.name),
+                                ],
+                              ),
+                              selected: selectedCategory == cat.id,
+                              selectedColor: catColor.withAlpha(60),
+                              onSelected: (_) {
+                                _closeFab();
+                                ref
+                                    .read(pantryFilterProvider.notifier)
+                                    .state = selectedCategory == cat.id
+                                    ? null
+                                    : cat.id;
+                              },
+                            ),
+                          );
+                        }),
                   ],
                 ),
               ),
@@ -183,32 +206,60 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
             lowStockAsync.when(
               data: (lowItems) => lowItems.isEmpty
                   ? const SizedBox(height: 6)
-                  : Container(
-                      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withAlpha(30),
+                  : Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: Material(
+                        color: Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: Colors.orange.withAlpha(80)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded,
-                              color: Colors.orange.shade800, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${lowItems.length} producto${lowItems.length > 1 ? 's' : ''} por agotarse',
-                              style: TextStyle(
-                                color: Colors.orange.shade800,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            _closeFab();
+                            ref.read(pantryLowStockFilterProvider.notifier).state =
+                                !lowStockOnly;
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: lowStockOnly
+                                  ? Colors.orange.withAlpha(55)
+                                  : Colors.orange.withAlpha(30),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: lowStockOnly
+                                    ? Colors.orange.withAlpha(160)
+                                    : Colors.orange.withAlpha(80),
                               ),
                             ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    color: Colors.orange.shade800, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    lowStockOnly
+                                        ? 'Mostrando productos por agotarse'
+                                        : '${lowItems.length} producto${lowItems.length > 1 ? 's' : ''} por agotarse',
+                                    style: TextStyle(
+                                      color: Colors.orange.shade800,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  lowStockOnly
+                                      ? Icons.filter_list_off
+                                      : Icons.filter_list,
+                                  color: Colors.orange.shade800,
+                                  size: 16,
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
               loading: () => const SizedBox(),
@@ -231,25 +282,52 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                   return RefreshIndicator(
                     onRefresh: () async =>
                         ref.invalidate(productsProvider),
-                    child: ListView.builder(
-                      padding:
-                          const EdgeInsets.only(top: 8, bottom: 100),
-                      itemCount: products.length,
-                      itemBuilder: (_, i) => ProductCard(
-                        product: products[i],
-                        onTap: () {
-                          _closeFab();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ProductDetailScreen(
-                                productId: products[i].id,
-                              ),
+                    child: _isGrid
+                        ? GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 100),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 1.1,
+                              crossAxisSpacing: 0,
+                              mainAxisSpacing: 0,
                             ),
-                          ).then((_) => ref.invalidate(productsProvider));
-                        },
-                      ),
-                    ),
+                            itemCount: products.length,
+                            itemBuilder: (_, i) => ProductCard(
+                              product: products[i],
+                              isGrid: true,
+                              onTap: () {
+                                _closeFab();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailScreen(
+                                      productId: products[i].id,
+                                    ),
+                                  ),
+                                ).then((_) => ref.invalidate(productsProvider));
+                              },
+                            ),
+                          )
+                        : ListView.builder(
+                            padding:
+                                const EdgeInsets.only(top: 8, bottom: 100),
+                            itemCount: products.length,
+                            itemBuilder: (_, i) => ProductCard(
+                              product: products[i],
+                              onTap: () {
+                                _closeFab();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailScreen(
+                                      productId: products[i].id,
+                                    ),
+                                  ),
+                                ).then((_) => ref.invalidate(productsProvider));
+                              },
+                            ),
+                          ),
                   );
                 },
                 loading: () => const ProductListSkeleton(),

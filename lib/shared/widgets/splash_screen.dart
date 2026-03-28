@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,11 +17,14 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<Offset> _slideAnim;
   late Animation<double> _loaderAnim;
 
-  static const String _appVersion = '2.2.2';
+  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _appVersion = info.version);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!kIsWeb) FlutterNativeSplash.remove();
     });

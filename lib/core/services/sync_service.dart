@@ -112,9 +112,15 @@ class SyncService {
 
   /// Full download: pull all Supabase rows into local DB (used on new device).
   Future<void> fullDownload() async {
-    if (userId == null || !SupabaseConfig.isConfigured) return;
+    if (userId == null || !SupabaseConfig.isConfigured) {
+      ref.read(initialSyncProvider.notifier).state = false;
+      return;
+    }
     final online = await _isOnline();
-    if (!online) return;
+    if (!online) {
+      ref.read(initialSyncProvider.notifier).state = false;
+      return;
+    }
     ref.read(syncStatusProvider.notifier).state = SyncStatus.syncing;
     try {
       final db = await DatabaseHelper.instance.database;
@@ -310,18 +316,24 @@ class SyncService {
     final List<dynamic> rows;
     try {
       rows = await _client.from(table).select().eq('user_id', uid);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[SyncService] _downloadTable error for $table: $e');
       return; // table might not exist in Supabase yet
     }
 
-    // Delete local rows whose IDs are not in the remote set
+    // Delete local rows whose IDs are not in the remote set.
+    // Only considers rows that were previously synced (synced_at IS NOT NULL)
+    // to avoid deleting locally-created data that hasn't been uploaded yet.
     if (await _hasColumn(db, table, 'user_id')) {
       final remoteIds =
           rows.map((r) => (r as Map)['id'] as String).toSet();
+      final hasSyncedAt = await _hasColumn(db, table, 'synced_at');
       final localRows = await db.query(
         table,
         columns: ['id'],
-        where: 'user_id = ?',
+        where: hasSyncedAt
+            ? 'user_id = ? AND synced_at IS NOT NULL'
+            : 'user_id = ?',
         whereArgs: [uid],
       );
       for (final row in localRows) {
@@ -333,17 +345,22 @@ class SyncService {
     }
 
     final now = DateTime.now().toIso8601String();
+    final defaults = _localOnlyDefaults[table] ?? {};
     for (final row in rows) {
       final map = Map<String, dynamic>.from(row as Map);
       map['synced_at'] = now;
+      // Inject defaults for legacy NOT NULL columns that don't exist in Supabase
+      for (final entry in defaults.entries) {
+        map.putIfAbsent(entry.key, () => entry.value);
+      }
       try {
         await db.insert(
           table,
           map,
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
-      } catch (_) {
-        // Column mismatch — skip this row
+      } catch (e) {
+        debugPrint('[SyncService] _downloadTable insert error for $table: $e');
       }
     }
   }
@@ -352,6 +369,13 @@ class SyncService {
   static const _localOnlyColumns = <String, List<String>>{
     // meal_plans had title + recipe_id before v5 migration; SQLite can't DROP COLUMN
     'meal_plans': ['title', 'recipe_id'],
+  };
+
+  /// Default values for local-only NOT NULL columns when inserting downloaded rows.
+  /// Used in _downloadTable to satisfy legacy NOT NULL constraints that can't be
+  /// dropped in SQLite.
+  static const _localOnlyDefaults = <String, Map<String, Object>>{
+    'meal_plans': {'title': ''},
   };
 
   Map<String, dynamic> _prepareForSupabase(

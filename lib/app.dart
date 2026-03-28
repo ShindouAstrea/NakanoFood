@@ -67,7 +67,20 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
       next.whenData((authState) {
         if (authState.event == AuthChangeEvent.signedIn) {
           ref.read(initialSyncProvider.notifier).state = true;
-          ref.read(syncServiceProvider).fullDownload();
+          // Primero subimos datos locales pendientes, luego bajamos el estado
+          // combinado. Orden importante: upload antes de download para que el
+          // paso de limpieza del download no borre datos aún no sincronizados.
+          // Timeout de seguridad: si no termina en 60s, desbloquear UI.
+          Future.any([
+            Future(() async {
+              final sync = ref.read(syncServiceProvider);
+              await sync.fullUpload();
+              await sync.fullDownload();
+            }),
+            Future.delayed(const Duration(seconds: 60)),
+          ]).whenComplete(() {
+            ref.read(initialSyncProvider.notifier).state = false;
+          });
         }
       });
     });

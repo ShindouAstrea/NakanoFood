@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/shopping_session.dart';
+import '../../../shared/utils/currency.dart';
 
 String _fmtN(double v) =>
     v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
@@ -47,9 +48,9 @@ class ShoppingItemTile extends StatelessWidget {
       subtitle: Text(
         isPurchased
             ? '${_fmtN(item.actualQuantity ?? item.plannedQuantity)} ${item.unit}'
-              ' · Total \$${item.totalCost.toStringAsFixed(0)}'
+              ' · Total ${clp(item.totalCost)}'
             : '${_fmtN(item.plannedQuantity)} ${item.unit}'
-              '${item.plannedPrice > 0 ? ' · Est. \$${(item.plannedPrice * item.plannedQuantity).toStringAsFixed(0)}' : ''}',
+              '${item.plannedPrice > 0 ? ' · Est. ${clp(item.plannedPrice * item.plannedQuantity)}' : ''}',
         style: theme.textTheme.bodySmall?.copyWith(
           color: subtitleColor,
           decoration: isPurchased ? TextDecoration.lineThrough : null,
@@ -103,7 +104,7 @@ class _PurchasedBadge extends StatelessWidget {
             const SizedBox(width: 3),
           ],
           Text(
-            '\$${item.totalCost.toStringAsFixed(0)}',
+            clp(item.totalCost),
             style: TextStyle(
               color: textColor,
               fontWeight: FontWeight.bold,

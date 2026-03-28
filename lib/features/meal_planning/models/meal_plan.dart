@@ -10,6 +10,7 @@ class MealPlan {
   // Joined
   final String? categoryName;
   final String? categoryColor;
+  final String? categoryDefaultTime;
 
   const MealPlan({
     required this.id,
@@ -19,6 +20,7 @@ class MealPlan {
     this.items = const [],
     this.categoryName,
     this.categoryColor,
+    this.categoryDefaultTime,
   });
 
   factory MealPlan.fromMap(Map<String, dynamic> map) {
@@ -29,6 +31,7 @@ class MealPlan {
       notes: map['notes'] as String?,
       categoryName: map['category_name'] as String?,
       categoryColor: map['category_color'] as String?,
+      categoryDefaultTime: map['category_default_time'] as String?,
     );
   }
 
@@ -49,6 +52,7 @@ class MealPlan {
     List<MealPlanItem>? items,
     Object? categoryName = _sentinel,
     Object? categoryColor = _sentinel,
+    Object? categoryDefaultTime = _sentinel,
   }) {
     return MealPlan(
       id: id ?? this.id,
@@ -60,6 +64,8 @@ class MealPlan {
           categoryName == _sentinel ? this.categoryName : categoryName as String?,
       categoryColor:
           categoryColor == _sentinel ? this.categoryColor : categoryColor as String?,
+      categoryDefaultTime:
+          categoryDefaultTime == _sentinel ? this.categoryDefaultTime : categoryDefaultTime as String?,
     );
   }
 

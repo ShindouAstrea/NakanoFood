@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
+import '../../../shared/utils/currency.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+  final bool isGrid;
 
   const ProductCard({
     super.key,
     required this.product,
     required this.onTap,
     this.onDelete,
+    this.isGrid = false,
   });
 
   Color _parseColor(String? hex) {
@@ -39,6 +42,8 @@ class ProductCard extends StatelessWidget {
     final double progress = product.quantityToMaintain > 0
         ? (product.currentQuantity / product.quantityToMaintain).clamp(0.0, 1.0)
         : 0;
+
+    if (isGrid) return _buildGrid(context, theme, colorScheme, catColor, statusColor, progress, isLow, isOut);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -82,24 +87,7 @@ class ProductCard extends StatelessWidget {
                         ),
                         if (isLow || isOut) ...[
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: statusColor.withAlpha(20),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                  color: statusColor.withAlpha(80), width: 1),
-                            ),
-                            child: Text(
-                              isOut ? 'Agotado' : 'Bajo',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: statusColor,
-                              ),
-                            ),
-                          ),
+                          _StatusBadge(label: isOut ? 'Agotado' : 'Bajo', color: statusColor),
                         ],
                       ],
                     ),
@@ -158,7 +146,7 @@ class ProductCard extends StatelessWidget {
                             ),
                             if (product.lastPrice > 0)
                               Text(
-                                '\$${product.lastPrice.toStringAsFixed(0)}',
+                                clp(product.lastPrice),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurface.withAlpha(120),
                                 ),
@@ -197,6 +185,136 @@ class ProductCard extends StatelessWidget {
     );
   }
 
+  Widget _buildGrid(
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme colorScheme,
+    Color catColor,
+    Color statusColor,
+    double progress,
+    bool isLow,
+    bool isOut,
+  ) {
+    return Card(
+      margin: const EdgeInsets.all(4),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Color top bar
+            Container(height: 4, color: catColor),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name + badge
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isLow || isOut) ...[
+                        const SizedBox(width: 4),
+                        _StatusBadge(label: isOut ? 'Agotado' : 'Bajo', color: statusColor),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // Category
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: catColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          product.categoryName ?? '',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurface.withAlpha(130),
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Quantity
+                  Text(
+                    '${_fmt(product.currentQuantity)} / ${_fmt(product.quantityToMaintain)} ${product.unit}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isLow
+                          ? statusColor
+                          : colorScheme.onSurface.withAlpha(150),
+                      fontWeight: isLow ? FontWeight.w600 : FontWeight.w400,
+                      fontSize: 11,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: colorScheme.onSurface.withAlpha(20),
+                      valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                      minHeight: 5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _fmt(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _StatusBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(80), width: 1),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
 }

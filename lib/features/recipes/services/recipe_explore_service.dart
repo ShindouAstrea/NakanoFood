@@ -1,56 +1,191 @@
+import 'dart:convert';
+import '../../../core/services/openai_service.dart';
+import '../../../core/services/pexels_service.dart';
+import '../../pantry/models/product.dart';
+import '../models/recipe.dart';
 import '../models/recipe_suggestion.dart';
 
-/// Servicio para obtener recomendaciones de recetas.
+/// Servicio de sugerencias de recetas con IA.
 ///
-/// TODO: Cuando el token de OpenAI esté disponible, reemplazar [_mockSuggestions]
-/// y [_mockPopular] con una llamada real a la API usando el prompt adecuado.
+/// Contexto que se envía a OpenAI:
+/// - Recetas guardadas (nombre + tipo, máx 30)
+/// - Stock disponible en despensa (qty > 0, máx 40)
+/// - Historial de cocción de las últimas 4 semanas
 ///
-/// Prompt sugerido para recomendaciones personalizadas:
-/// "Dado que el usuario ya tiene estas recetas: [lista], recomienda 10 recetas
-/// nuevas complementarias. Devuelve JSON con campos: name, type, description,
-/// estimated_minutes, difficulty, reason."
-///
-/// Prompt sugerido para top populares:
-/// "Recomienda las 10 recetas más populares de [país]. Devuelve JSON con
-/// campos: name, type, description, estimated_minutes, difficulty, reason."
+/// Si la API falla, devuelve el mock local automáticamente.
 class RecipeExploreService {
-  /// Devuelve sugerencias de recetas.
-  /// - Si [existingRecipeNames] está vacío → top populares del país.
-  /// - Si hay recetas → recomendaciones personalizadas basadas en ellas.
+  static const _systemPrompt =
+      'Eres un asistente culinario inteligente integrado en una app de gestión '
+      'de recetas y despensa. Tu única función es analizar el contexto del usuario '
+      'y devolver sugerencias de recetas útiles, variadas y realizables. '
+      'Responde SIEMPRE con un JSON válido con la key "suggestions".';
+
   static Future<List<RecipeSuggestion>> getSuggestions({
-    required List<String> existingRecipeNames,
+    required List<Recipe> savedRecipes,
+    required List<Product> pantryProducts,
     String? typeFilter,
   }) async {
-    // Simula latencia de API
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    // TODO: Reemplazar con llamada real a OpenAI:
-    // final prompt = existingRecipeNames.isEmpty
-    //     ? _buildPopularPrompt()
-    //     : _buildPersonalizedPrompt(existingRecipeNames);
-    // final response = await OpenAIService.complete(prompt);
-    // final suggestions = (jsonDecode(response) as List)
-    //     .map((e) => RecipeSuggestion.fromJson(e))
-    //     .toList();
-
-    final suggestions = existingRecipeNames.isEmpty
-        ? _mockPopular()
-        : _mockSuggestions(existingRecipeNames);
-
-    if (typeFilter != null) {
-      return suggestions.where((s) => s.type == typeFilter).toList();
+    try {
+      final suggestions = await _fetchFromAI(
+        savedRecipes: savedRecipes,
+        pantryProducts: pantryProducts,
+        typeFilter: typeFilter,
+      );
+      if (typeFilter != null) {
+        return suggestions.where((s) => s.type == typeFilter).toList();
+      }
+      return suggestions;
+    } catch (_) {
+      final fallback = savedRecipes.isEmpty ? _mockPopular() : _mockPersonalized();
+      if (typeFilter != null) {
+        return fallback.where((s) => s.type == typeFilter).toList();
+      }
+      return fallback;
     }
-    return suggestions;
   }
 
-  // ── Mock data (reemplazar con OpenAI) ─────────────────────────────────────
+  // ─── Lógica de IA ──────────────────────────────────────────────────────────
+
+  static Future<List<RecipeSuggestion>> _fetchFromAI({
+    required List<Recipe> savedRecipes,
+    required List<Product> pantryProducts,
+    String? typeFilter,
+  }) async {
+    final prompt = _buildPrompt(
+      savedRecipes: savedRecipes,
+      pantryProducts: pantryProducts,
+      typeFilter: typeFilter,
+    );
+
+    final raw = await OpenAIService.complete(prompt, systemPrompt: _systemPrompt);
+
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    final list = decoded['suggestions'] as List<dynamic>? ?? [];
+    final suggestions = list
+        .whereType<Map<String, dynamic>>()
+        .map(RecipeSuggestion.fromJson)
+        .toList();
+
+    // Buscar imágenes en paralelo — fallback al nombre si no hay imageQuery
+    return Future.wait(
+      suggestions.map((s) async {
+        final query = (s.imageQuery?.isNotEmpty == true)
+            ? s.imageQuery!
+            : '${s.name} ${s.type} food dish';
+        final url = await PexelsService.searchPhoto(query);
+        return s.withImageUrl(url);
+      }),
+    );
+  }
+
+  static String _buildPrompt({
+    required List<Recipe> savedRecipes,
+    required List<Product> pantryProducts,
+    String? typeFilter,
+  }) {
+    final typeConstraint = typeFilter != null
+        ? '\n⚠️ SOLO sugiere recetas de tipo "$typeFilter". No incluyas otros tipos.'
+        : '';
+
+    // Contexto compacto para minimizar tokens
+    final savedSection = savedRecipes.isEmpty
+        ? '(sin recetas guardadas aún)'
+        : jsonEncode(
+            savedRecipes.take(30).map((r) => {'name': r.name, 'type': r.type}).toList(),
+          );
+
+    final pantrySection = pantryProducts.isEmpty
+        ? '(despensa vacía)'
+        : jsonEncode(
+            pantryProducts
+                .where((p) => !p.isOut)
+                .take(40)
+                .map((p) => {'name': p.name, 'qty': p.currentQuantity, 'unit': p.unit})
+                .toList(),
+          );
+
+    final since = DateTime.now().subtract(const Duration(days: 28));
+    final recentCookings = savedRecipes
+        .where((r) => r.lastCookedAt != null && r.lastCookedAt!.isAfter(since))
+        .map((r) => {
+              'name': r.name,
+              'type': r.type,
+              'date': r.lastCookedAt!.toIso8601String().substring(0, 10),
+            })
+        .toList();
+    final historySection =
+        recentCookings.isEmpty ? '(sin historial reciente)' : jsonEncode(recentCookings);
+
+    return '''
+Analiza el siguiente contexto culinario y genera entre 4 y 6 sugerencias de recetas.$typeConstraint
+
+### Recetas guardadas del usuario
+$savedSection
+
+### Stock disponible en despensa (solo productos con cantidad > 0)
+$pantrySection
+
+### Historial de cocción (últimas 4 semanas)
+$historySection
+
+---
+
+## PRIORIDADES (en orden)
+
+1. Recetas que aprovechen ingredientes del stock disponible — especialmente los de mayor cantidad.
+2. Variedad respecto al historial — evita repetir proteínas, estilos o tipos de los últimos 7 días.
+3. Al menos 1 sugerencia de descubrimiento — algo diferente al estilo habitual del usuario.
+
+## REGLAS
+
+- No sugieras recetas con nombre similar a las ya guardadas.
+- `type` debe ser exactamente uno de: "Desayuno", "Comida Principal", "Cena", "Snack", "Postre", "Pastelería", "Ensalada", "Sopa", "Bebida", "Otro".
+- `difficulty` debe ser exactamente: "Fácil", "Medio" o "Difícil".
+- `reason` máximo 100 caracteres; menciona un ingrediente concreto del stock o un patrón del historial.
+- `estimated_minutes` debe ser un entero mayor a 10.
+- `description` máximo 120 caracteres, apetitosa y concreta.
+- `image_query` frase en inglés de 3-5 palabras para buscar la foto en Pexels. Reglas:
+  * Describe el plato terminado, no los ingredientes crudos.
+  * Incluye el nombre del plato en inglés + 1-2 palabras visuales (color, textura, presentación).
+  * Termina siempre con "food" o "dish" o "meal".
+  * Ejemplos buenos: "baked Chilean empanadas golden food", "creamy tomato soup bowl food", "grilled salmon lemon dish".
+  * Ejemplos malos: "empanadas", "soup ingredients", "meat and vegetables".
+- `ingredients`: lista de 4-10 ingredientes con cantidad realista para 2-4 porciones.
+  * `unit` debe ser uno de: g, kg, ml, L, taza, cucharada, cucharadita, unidad, rodaja, pizca, sobre.
+- `steps`: lista de 4-8 pasos de preparación claros y concisos, en español.
+
+## FORMATO DE RESPUESTA (obligatorio)
+
+{
+  "suggestions": [
+    {
+      "name": "string",
+      "type": "string",
+      "description": "string",
+      "estimated_minutes": number,
+      "difficulty": "string",
+      "reason": "string",
+      "image_query": "string",
+      "ingredients": [
+        {"name": "string", "quantity": number, "unit": "string"}
+      ],
+      "steps": [
+        {"step": number, "description": "string"}
+      ]
+    }
+  ]
+}
+''';
+  }
+
+  // ─── Mock data (fallback sin conexión) ─────────────────────────────────────
 
   static List<RecipeSuggestion> _mockPopular() => [
         const RecipeSuggestion(
           name: 'Empanadas de Pino',
           type: 'Snack',
           description:
-              'Masa horneada rellena de pino (carne molida, cebolla, huevo duro, aceitunas y pasas). Ícono de las Fiestas Patrias.',
+              'Masa horneada rellena de pino (carne molida, cebolla, huevo duro, aceitunas y pasas).',
           estimatedMinutes: 90,
           difficulty: 'Medio',
           reason: 'Ícono culinario de las Fiestas Patrias',
@@ -59,7 +194,7 @@ class RecipeExploreService {
           name: 'Pastel de Choclo',
           type: 'Comida Principal',
           description:
-              'Costra de choclo fresco molido sobre pino de carne y pollo, con huevo duro y aceitunas, gratinado al horno con azúcar.',
+              'Costra de choclo fresco sobre pino de carne y pollo, gratinado al horno con azúcar.',
           estimatedMinutes: 85,
           difficulty: 'Medio',
           reason: 'Favorito del verano chileno',
@@ -68,7 +203,7 @@ class RecipeExploreService {
           name: 'Sopaipillas',
           type: 'Snack',
           description:
-              'Masa frita de harina y zapallo, crocante por fuera y suave por dentro. Se sirve con pebre, salsa de tomate o chancaca.',
+              'Masa frita de harina y zapallo, crocante por fuera. Con pebre, salsa de tomate o chancaca.',
           estimatedMinutes: 40,
           difficulty: 'Fácil',
           reason: 'Snack callejero más popular de Chile',
@@ -77,7 +212,7 @@ class RecipeExploreService {
           name: 'Leche Asada',
           type: 'Postre',
           description:
-              'Crema suave horneada al baño maría con caramelo en el fondo. El postre casero chileno más clásico y reconfortante.',
+              'Crema suave horneada al baño maría con caramelo. El postre casero chileno más clásico.',
           estimatedMinutes: 60,
           difficulty: 'Fácil',
           reason: 'Postre casero chileno más clásico',
@@ -86,7 +221,7 @@ class RecipeExploreService {
           name: 'Charquicán',
           type: 'Comida Principal',
           description:
-              'Guiso seco de papas, zapallo y carne desmenuzada salteada con verduras. Se sirve con un huevo frito encima.',
+              'Guiso seco de papas, zapallo y carne desmenuzada con verduras. Se sirve con huevo frito.',
           estimatedMinutes: 45,
           difficulty: 'Fácil',
           reason: 'Receta chilena de la abuela',
@@ -95,7 +230,7 @@ class RecipeExploreService {
           name: 'Mote con Huesillo',
           type: 'Bebida',
           description:
-              'Bebida fría de mote de trigo con duraznos deshidratados en almíbar especiado con canela y clavo. Refresco nacional de Chile.',
+              'Mote de trigo con duraznos deshidratados en almíbar de canela y clavo. Refresco nacional.',
           estimatedMinutes: 30,
           difficulty: 'Fácil',
           reason: 'Bebida veraniega nacional de Chile',
@@ -104,7 +239,7 @@ class RecipeExploreService {
           name: 'Humitas',
           type: 'Snack',
           description:
-              'Pasta de choclo fresco con albahaca y cebolla, envuelta en hojas de maíz y cocida al vapor. Tradición culinaria de verano.',
+              'Pasta de choclo con albahaca y cebolla, envuelta en hojas de maíz y cocida al vapor.',
           estimatedMinutes: 90,
           difficulty: 'Difícil',
           reason: 'Tradición culinaria chilena de verano',
@@ -113,7 +248,7 @@ class RecipeExploreService {
           name: 'Panqueques con Manjar',
           type: 'Postre',
           description:
-              'Panqueques delgados rellenos de manjar (dulce de leche chileno), enrollados o doblados y espolvoreados con azúcar flor.',
+              'Panqueques delgados rellenos de manjar chileno, enrollados y espolvoreados con azúcar flor.',
           estimatedMinutes: 25,
           difficulty: 'Fácil',
           reason: 'Postre favorito de la once en Chile',
@@ -122,7 +257,7 @@ class RecipeExploreService {
           name: 'Anticuchos de Vacuno',
           type: 'Snack',
           description:
-              'Brochetas de corazón o filete de vacuno marinadas en ají panca, ajo y comino, asadas a la parrilla. Clásico de la cocina criolla.',
+              'Brochetas de vacuno marinadas en ají panca, ajo y comino, asadas a la parrilla.',
           estimatedMinutes: 35,
           difficulty: 'Fácil',
           reason: 'Popular en fondas y asados chilenos',
@@ -131,24 +266,21 @@ class RecipeExploreService {
           name: 'Milhojas de Crema',
           type: 'Postre',
           description:
-              'Capas de hojaldre crujiente rellenas de crema pastelera y manjar, cubiertas con azúcar flor. Postre de pastelería chilena.',
+              'Capas de hojaldre crujiente rellenas de crema pastelera y manjar, cubiertas con azúcar flor.',
           estimatedMinutes: 60,
           difficulty: 'Difícil',
           reason: 'Postre estrella de las pastelerías chilenas',
         ),
       ];
 
-  static List<RecipeSuggestion> _mockSuggestions(
-      List<String> existingNames) =>
-      [
+  static List<RecipeSuggestion> _mockPersonalized() => [
         const RecipeSuggestion(
-          name: 'Cupcake Proteinico',
+          name: 'Cupcake Proteínico',
           type: 'Postre',
-          description:
-              'Cupcacke a base de platano con mantequilla de mani y berries',
+          description: 'Cupcake a base de plátano con mantequilla de maní y berries.',
           estimatedMinutes: 30,
           difficulty: 'Fácil',
-          reason: 'Postre o Snack Nutritivo y saludable',
+          reason: 'Postre nutritivo y saludable',
         ),
         ..._mockPopular().take(9),
       ];

@@ -207,11 +207,13 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
 
 final pantryFilterProvider = StateProvider<String?>((ref) => null);
 final pantrySearchProvider = StateProvider<String>((ref) => '');
+final pantryLowStockFilterProvider = StateProvider<bool>((ref) => false);
 
 final filteredProductsProvider = Provider<AsyncValue<List<Product>>>((ref) {
   final products = ref.watch(productsProvider);
   final filter = ref.watch(pantryFilterProvider);
   final search = ref.watch(pantrySearchProvider).toLowerCase();
+  final lowStockOnly = ref.watch(pantryLowStockFilterProvider);
 
   return products.whenData((list) {
     return list.where((p) {
@@ -219,7 +221,8 @@ final filteredProductsProvider = Provider<AsyncValue<List<Product>>>((ref) {
       final matchesSearch = search.isEmpty ||
           p.name.toLowerCase().contains(search) ||
           (p.categoryName?.toLowerCase().contains(search) ?? false);
-      return matchesCategory && matchesSearch;
+      final matchesLowStock = !lowStockOnly || p.isLow;
+      return matchesCategory && matchesSearch && matchesLowStock;
     }).toList();
   });
 });

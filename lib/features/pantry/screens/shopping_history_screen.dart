@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/shopping_provider.dart';
 import '../models/shopping_session.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/utils/currency.dart';
 
 String _fmtN(double v) =>
     v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
@@ -107,13 +108,13 @@ class _SpendingChart extends StatelessWidget {
               children: [
                 _StatBadge(
                   label: 'Total 6 meses',
-                  value: '\$${totalGasto.toStringAsFixed(0)}',
+                  value: clp(totalGasto),
                   color: primary,
                 ),
                 const SizedBox(width: 8),
                 _StatBadge(
                   label: 'Promedio/mes',
-                  value: '\$${promedio.toStringAsFixed(0)}',
+                  value: clp(promedio),
                   color: theme.colorScheme.secondary,
                 ),
               ],
@@ -138,7 +139,11 @@ class _SpendingChart extends StatelessWidget {
                         children: [
                           if (value > 0)
                             Text(
-                              '\$${value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0)}',
+                              value >= 1000000
+                                  ? '\$${(value / 1000000).toStringAsFixed(1)}M'
+                                  : value >= 1000
+                                      ? '\$${(value / 1000).round()}k'
+                                      : clp(value),
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w600,
@@ -256,7 +261,7 @@ class _SessionCard extends StatelessWidget {
         subtitle: Text(
           isCancelled
               ? 'Compra cancelada'
-              : '${session.purchasedCount} productos · \$${session.calculatedTotal.toStringAsFixed(0)}',
+              : '${session.purchasedCount} productos · ${clp(session.calculatedTotal)}',
           style: TextStyle(
             color: isCancelled ? Colors.red.shade400 : Colors.grey.shade600,
           ),
@@ -277,7 +282,7 @@ class _SessionCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Text(
-                        'Total: \$${session.calculatedTotal.toStringAsFixed(0)}',
+                        'Total: ${clp(session.calculatedTotal)}',
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.green.shade700,
@@ -319,7 +324,7 @@ class _SessionItemTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            '\$${(qty * price).toStringAsFixed(0)}',
+            clp(qty * price),
             style: const TextStyle(
                 fontSize: 13, fontWeight: FontWeight.w600),
           ),

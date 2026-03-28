@@ -118,14 +118,24 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
           Expanded(
             child: recipesAsync.when(
               data: (recipes) {
-                if (recipes.isEmpty) {
+                final allSavedForCheck = allRecipesAsync.value ?? [];
+                final hasFilter = typeFilter != null ||
+                    ref.read(recipeSearchProvider).isNotEmpty;
+                if (recipes.isEmpty && !hasFilter && allSavedForCheck.isEmpty) {
                   return _DefaultRecipesPicker(
                     defaults: _allDefaults,
                     onSaved: () => ref.invalidate(recipesProvider),
                   );
                 }
-                final allSaved = allRecipesAsync.value ?? [];
-                final unsaved = _unsavedDefaults(allSaved);
+                if (recipes.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No hay recetas con este filtro.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  );
+                }
+                final unsaved = _unsavedDefaults(allSavedForCheck);
                 return RefreshIndicator(
                   onRefresh: () async =>
                       ref.invalidate(recipesProvider),

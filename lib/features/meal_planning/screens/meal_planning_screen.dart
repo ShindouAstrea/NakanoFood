@@ -17,13 +17,14 @@ class MealPlanningScreen extends ConsumerStatefulWidget {
 }
 
 class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
-  CalendarFormat _calendarFormat = CalendarFormat.month;
+  CalendarFormat _calendarFormat = CalendarFormat.week;
 
   @override
   Widget build(BuildContext context) {
     final selectedDate = ref.watch(selectedDateProvider);
     final datesWithPlansAsync = ref.watch(datesWithPlansProvider);
     final mealsForDayAsync = ref.watch(mealPlansForDateProvider);
+    final theme = Theme.of(context);
     final Map<CalendarFormat, String> calendarFormat = {
       CalendarFormat.month: "Mes",
       CalendarFormat.twoWeeks: "2 Semanas",
@@ -32,7 +33,8 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Planificación Alimentaria'),
+        title: const Text('Planificación'),
+        centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.category_outlined),
@@ -48,7 +50,14 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
         children: [
           // Calendar
           Card(
-            margin: const EdgeInsets.all(8),
+            margin: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: theme.colorScheme.outline.withAlpha(40),
+              ),
+            ),
             child: TableCalendar(
               locale: 'es_Es',
               startingDayOfWeek: StartingDayOfWeek.monday,
@@ -71,44 +80,115 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
               },
               calendarStyle: CalendarStyle(
                 selectedDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
+                  color: theme.colorScheme.primary,
                   shape: BoxShape.circle,
                 ),
                 todayDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withAlpha(80),
+                  color: theme.colorScheme.primary.withAlpha(50),
                   shape: BoxShape.circle,
+                ),
+                todayTextStyle: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
                 ),
                 markerDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondary,
+                  color: theme.colorScheme.secondary,
                   shape: BoxShape.circle,
                 ),
+                markersMaxCount: 1,
+                markerSize: 5,
+                markerMargin: const EdgeInsets.only(top: 1),
+                outsideDaysVisible: false,
+                cellMargin: const EdgeInsets.all(4),
               ),
-              headerStyle: const HeaderStyle(
+              headerStyle: HeaderStyle(
                 formatButtonVisible: true,
                 titleCentered: true,
+                formatButtonDecoration: BoxDecoration(
+                  border: Border.all(color: theme.colorScheme.outline.withAlpha(80)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                formatButtonTextStyle: theme.textTheme.labelSmall!,
+                leftChevronIcon: Icon(Icons.chevron_left,
+                    color: theme.colorScheme.onSurface),
+                rightChevronIcon: Icon(Icons.chevron_right,
+                    color: theme.colorScheme.onSurface),
+                headerPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              daysOfWeekStyle: DaysOfWeekStyle(
+                weekdayStyle: theme.textTheme.labelSmall!.copyWith(
+                  color: theme.colorScheme.onSurface.withAlpha(160),
+                ),
+                weekendStyle: theme.textTheme.labelSmall!.copyWith(
+                  color: theme.colorScheme.error.withAlpha(160),
+                ),
               ),
             ),
           ),
+
           // Day header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 4),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  DateFormat('EEEE, d MMMM', 'es').format(selectedDate),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        DateFormat('EEEE', 'es').format(selectedDate),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
                       ),
+                      Text(
+                        DateFormat('d \'de\' MMMM, yyyy', 'es').format(selectedDate),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                TextButton.icon(
+                mealsForDayAsync.maybeWhen(
+                  data: (meals) => meals.isNotEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${meals.length} comida${meals.length != 1 ? 's' : ''}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                  orElse: () => const SizedBox.shrink(),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
                   onPressed: () => _addMeal(context),
-                  icon: const Icon(Icons.add, size: 18),
+                  icon: const Icon(Icons.add, size: 16),
                   label: const Text('Agregar'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ],
             ),
           ),
+
+          const Divider(height: 1, indent: 16, endIndent: 16),
+
           // Meals for selected day
           Expanded(
             child: mealsForDayAsync.when(
@@ -125,7 +205,7 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
                   );
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
                   itemCount: meals.length,
                   itemBuilder: (_, i) => _MealCard(
                     meal: meals[i],
@@ -144,11 +224,6 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab_meal_planning',
-        onPressed: () => _addMeal(context),
-        child: const Icon(Icons.add),
       ),
     );
   }
@@ -175,9 +250,9 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
-          ElevatedButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Eliminar'),
           ),
         ],
@@ -197,6 +272,17 @@ class _MealCard extends StatelessWidget {
   const _MealCard(
       {required this.meal, required this.onEdit, required this.onDelete});
 
+  /// Convierte "08:00" → "8:00 AM" / "13:30" → "1:30 PM"
+  String _formatTime(String time) {
+    final parts = time.split(':');
+    if (parts.length < 2) return time;
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts[1].padLeft(2, '0');
+    final period = hour < 12 ? 'AM' : 'PM';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    return '$displayHour:$minute $period';
+  }
+
   Color _parseColor(String? hex) {
     if (hex == null) return Colors.grey;
     try {
@@ -212,81 +298,219 @@ class _MealCard extends StatelessWidget {
     final catColor = _parseColor(meal.categoryColor);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: catColor.withAlpha(30),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: catColor.withAlpha(100)),
-          ),
-          alignment: Alignment.center,
-          child: Icon(Icons.restaurant, color: catColor, size: 22),
-        ),
-        title: Text(
-          meal.categoryName ?? 'Sin categoría',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: catColor,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...meal.items.map((item) => Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Row(
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: theme.colorScheme.outline.withAlpha(30)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onEdit,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Color accent bar
+              Container(
+                width: 5,
+                color: catColor,
+              ),
+              // Content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        item.recipeId != null
-                            ? Icons.menu_book_outlined
-                            : Icons.circle,
-                        size: item.recipeId != null ? 12 : 5,
-                        color: theme.colorScheme.onSurface.withAlpha(120),
+                      // Category header row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: catColor.withAlpha(25),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(Icons.restaurant,
+                                color: catColor, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  meal.categoryName ?? 'Sin categoría',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: catColor,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    if (meal.categoryDefaultTime != null) ...[
+                                      Icon(
+                                        Icons.schedule_outlined,
+                                        size: 12,
+                                        color: theme.colorScheme.onSurface
+                                            .withAlpha(120),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        _formatTime(meal.categoryDefaultTime!),
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          color: theme.colorScheme.onSurface
+                                              .withAlpha(160),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (meal.items.isNotEmpty)
+                                        Text(
+                                          ' · ',
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: theme.colorScheme.onSurface
+                                                .withAlpha(80),
+                                          ),
+                                        ),
+                                    ],
+                                    if (meal.items.isNotEmpty)
+                                      Text(
+                                        '${meal.items.length} elemento${meal.items.length != 1 ? 's' : ''}',
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          color: theme.colorScheme.onSurface
+                                              .withAlpha(100),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Actions menu
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_vert,
+                              size: 18,
+                              color: theme.colorScheme.onSurface.withAlpha(120),
+                            ),
+                            onSelected: (val) {
+                              if (val == 'edit') onEdit();
+                              if (val == 'delete') onDelete();
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 16),
+                                    SizedBox(width: 8),
+                                    Text('Editar'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline,
+                                        size: 16, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('Eliminar',
+                                        style:
+                                            TextStyle(color: Colors.red)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
-                              fontSize: 13,
-                              color:
-                                  theme.colorScheme.onSurface.withAlpha(180)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      // Items list
+                      if (meal.items.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        ...meal.items.map((item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 3),
+                                    child: Icon(
+                                      item.recipeId != null
+                                          ? Icons.menu_book_outlined
+                                          : Icons.fiber_manual_record,
+                                      size: item.recipeId != null ? 13 : 6,
+                                      color: catColor.withAlpha(180),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurface
+                                            .withAlpha(200),
+                                        height: 1.4,
+                                      ),
+                                      // Allow wrapping for long text
+                                      softWrap: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                      ],
+                      // Notes
+                      if (meal.notes != null && meal.notes!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withAlpha(80),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.notes_outlined,
+                                size: 13,
+                                color: theme.colorScheme.onSurface.withAlpha(120),
+                              ),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  meal.notes!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withAlpha(160),
+                                    fontStyle: FontStyle.italic,
+                                    height: 1.4,
+                                  ),
+                                  // Allow up to 3 lines for notes
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                )),
-            if (meal.notes != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                meal.notes!,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
-          ],
-        ),
-        isThreeLine: meal.items.length > 1 || meal.notes != null,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              onPressed: onEdit,
-              color: Colors.grey.shade600,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: onDelete,
-              color: Colors.red.shade400,
-            ),
-          ],
+          ),
         ),
       ),
     );
