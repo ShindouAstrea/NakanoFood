@@ -28,6 +28,7 @@ dependencies:
 
   # Image
   image_picker: ^1.1.2
+  mobile_scanner: ^5.2.3
 
   # Calendar
   table_calendar: ^3.1.2

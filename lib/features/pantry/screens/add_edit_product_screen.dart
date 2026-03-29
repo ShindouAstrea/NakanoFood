@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../providers/pantry_provider.dart';
+import '../services/open_food_facts_service.dart';
+import '../widgets/barcode_scanner_sheet.dart';
 
 const _uuid = Uuid();
 
@@ -48,6 +51,8 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
   final _sodiumCtrl = TextEditingController();
   final _servingSizeCtrl = TextEditingController();
   final _servingUnitCtrl = TextEditingController();
+
+  bool _loadingBarcode = false;
 
   bool get isEditing => widget.product != null;
 
@@ -116,6 +121,53 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
     _servingSizeCtrl.dispose();
     _servingUnitCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _scanBarcode() async {
+    if (kIsWeb) return;
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const BarcodeScannerSheet(),
+      ),
+    );
+    if (code == null || !mounted) return;
+
+    setState(() => _loadingBarcode = true);
+    final product = await OpenFoodFactsService.fetchByBarcode(code);
+    if (!mounted) return;
+    setState(() => _loadingBarcode = false);
+
+    if (product == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Producto no encontrado. Puedes ingresarlo manualmente.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      if (product.name.isNotEmpty) _nameCtrl.text = product.name;
+      if (product.servingSize != null) {
+        _showNutritional = true;
+        _servingSizeCtrl.text = product.servingSize!.toStringAsFixed(0);
+        _servingUnitCtrl.text = product.servingUnit;
+        if (product.kcal != null) _kcalCtrl.text = product.kcal!.toStringAsFixed(1);
+        if (product.proteins != null) _proteinCtrl.text = product.proteins!.toStringAsFixed(1);
+        if (product.carbs != null) _carbsCtrl.text = product.carbs!.toStringAsFixed(1);
+        if (product.sugars != null) _sugarsCtrl.text = product.sugars!.toStringAsFixed(1);
+        if (product.totalFats != null) _totalFatsCtrl.text = product.totalFats!.toStringAsFixed(1);
+        if (product.saturatedFats != null) _saturatedFatsCtrl.text = product.saturatedFats!.toStringAsFixed(1);
+        if (product.fiber != null) _fiberCtrl.text = product.fiber!.toStringAsFixed(1);
+        if (product.sodium != null) _sodiumCtrl.text = product.sodium!.toStringAsFixed(0);
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Producto encontrado: ${product.name}')),
+    );
   }
 
   Future<void> _save() async {
@@ -192,6 +244,23 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
       appBar: AppBar(
         title: Text(isEditing ? 'Editar Producto' : 'Nuevo Producto'),
         actions: [
+          if (!kIsWeb)
+            _loadingBarcode
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.qr_code_scanner,
+                        color: Colors.white),
+                    tooltip: 'Escanear código de barras',
+                    onPressed: _scanBarcode,
+                  ),
           TextButton(
             onPressed: _save,
             child:
