@@ -6,6 +6,7 @@ import '../providers/meal_planning_provider.dart';
 import '../models/meal_plan.dart';
 import 'add_edit_meal_screen.dart';
 import 'manage_categories_screen.dart';
+import 'nutrition_dashboard_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/skeletons/meal_card_skeleton.dart';
 
@@ -36,6 +37,15 @@ class _MealPlanningScreenState extends ConsumerState<MealPlanningScreen> {
         title: const Text('Planificación'),
         centerTitle: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.monitor_heart_outlined),
+            tooltip: 'Nutrición del día',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const NutritionDashboardScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.category_outlined),
             tooltip: 'Gestionar categorías',

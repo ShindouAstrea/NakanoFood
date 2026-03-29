@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -791,16 +792,85 @@ class _InfoChip extends StatelessWidget {
 
 // ─── Modo Cocina ──────────────────────────────────────────────────────────────
 
-class _CookingModeScreen extends StatefulWidget {
+class _CookingModeScreen extends ConsumerStatefulWidget {
   final Recipe recipe;
   const _CookingModeScreen({required this.recipe});
 
   @override
-  State<_CookingModeScreen> createState() => _CookingModeScreenState();
+  ConsumerState<_CookingModeScreen> createState() => _CookingModeScreenState();
 }
 
-class _CookingModeScreenState extends State<_CookingModeScreen> {
+class _CookingModeScreenState extends ConsumerState<_CookingModeScreen> {
   int _step = 0;
+  bool _largeText = false;
+
+  Timer? _timer;
+  int _timerTotal = 0;
+  int _timerRemaining = 0;
+  bool _timerRunning = false;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  int? _detectStepTimer(String description) {
+    final match = RegExp(
+      r'(\d+)\s*(min(?:utos?)?|seg(?:undos?)?)',
+      caseSensitive: false,
+    ).firstMatch(description);
+    if (match == null) return null;
+    final value = int.parse(match.group(1)!);
+    final unit = match.group(2)!.toLowerCase();
+    return unit.startsWith('seg') ? value : value * 60;
+  }
+
+  void _startTimer(int seconds) {
+    _timer?.cancel();
+    setState(() {
+      _timerTotal = seconds;
+      _timerRemaining = seconds;
+      _timerRunning = true;
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      setState(() {
+        if (_timerRemaining > 0) {
+          _timerRemaining--;
+        } else {
+          _timerRunning = false;
+          t.cancel();
+        }
+      });
+    });
+  }
+
+  void _resetTimer() {
+    _timer?.cancel();
+    setState(() {
+      _timerRunning = false;
+      _timerRemaining = _timerTotal;
+    });
+  }
+
+  void _goToStep(int step) {
+    _timer?.cancel();
+    setState(() {
+      _step = step;
+      _timerTotal = 0;
+      _timerRemaining = 0;
+      _timerRunning = false;
+    });
+  }
+
+  String _formatTimer(int seconds) {
+    if (seconds >= 60) {
+      final m = seconds ~/ 60;
+      final s = seconds % 60;
+      return '$m:${s.toString().padLeft(2, '0')}';
+    }
+    return '${seconds}s';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -809,6 +879,9 @@ class _CookingModeScreenState extends State<_CookingModeScreen> {
     final current = steps[_step];
     final isFirst = _step == 0;
     final isLast = _step == steps.length - 1;
+    final detectedSeconds = _detectStepTimer(current.description);
+    final timerProgress = _timerTotal > 0 ? _timerRemaining / _timerTotal : 0.0;
+    final timerDone = _timerTotal > 0 && _timerRemaining == 0;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -820,6 +893,12 @@ class _CookingModeScreenState extends State<_CookingModeScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            icon: Icon(_largeText ? Icons.text_decrease : Icons.text_increase,
+                size: 20),
+            tooltip: _largeText ? 'Texto normal' : 'Texto grande',
+            onPressed: () => setState(() => _largeText = !_largeText),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
@@ -835,7 +914,6 @@ class _CookingModeScreenState extends State<_CookingModeScreen> {
       ),
       body: Column(
         children: [
-          // Progress bar
           LinearProgressIndicator(
             value: (_step + 1) / steps.length,
             minHeight: 4,
@@ -843,38 +921,141 @@ class _CookingModeScreenState extends State<_CookingModeScreen> {
 
           // Step content
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Step number badge
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${current.stepNumber}',
-                      style: const TextStyle(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) {
+                final v = details.primaryVelocity ?? 0;
+                if (v < -300 && !isLast) _goToStep(_step + 1);
+                if (v > 300 && !isFirst) _goToStep(_step - 1);
+              },
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 16),
+                    // Step number badge
+                    Container(
+                      width: _largeText ? 72 : 56,
+                      height: _largeText ? 72 : 56,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '${current.stepNumber}',
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold),
+                          fontSize: _largeText ? 28 : 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Step description
-                  Text(
-                    current.description,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      height: 1.5,
+                    const SizedBox(height: 32),
+                    // Step description
+                    Text(
+                      current.description,
+                      textAlign: TextAlign.center,
+                      style: (_largeText
+                              ? theme.textTheme.displaySmall
+                              : theme.textTheme.headlineSmall)
+                          ?.copyWith(height: 1.5),
                     ),
-                  ),
-                ],
+
+                    // Timer section
+                    if (detectedSeconds != null && _timerTotal == 0) ...[
+                      const SizedBox(height: 28),
+                      OutlinedButton.icon(
+                        onPressed: () => _startTimer(detectedSeconds),
+                        icon: const Icon(Icons.timer_outlined, size: 18),
+                        label: Text(
+                          detectedSeconds >= 60
+                              ? 'Iniciar timer ${detectedSeconds ~/ 60} min'
+                              : 'Iniciar timer ${detectedSeconds}s',
+                        ),
+                      ),
+                    ] else if (_timerTotal > 0) ...[
+                      const SizedBox(height: 28),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 90,
+                            height: 90,
+                            child: CircularProgressIndicator(
+                              value: timerProgress,
+                              strokeWidth: 6,
+                              backgroundColor:
+                                  theme.colorScheme.primary.withAlpha(30),
+                              color: timerDone
+                                  ? Colors.green
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
+                          Text(
+                            timerDone
+                                ? '¡Listo!'
+                                : _formatTimer(_timerRemaining),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: timerDone
+                                  ? Colors.green
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_timerRunning)
+                            TextButton.icon(
+                              onPressed: () {
+                                _timer?.cancel();
+                                setState(() => _timerRunning = false);
+                              },
+                              icon: const Icon(Icons.pause, size: 16),
+                              label: const Text('Pausar'),
+                            )
+                          else if (_timerRemaining > 0)
+                            TextButton.icon(
+                              onPressed: () => _startTimer(_timerRemaining),
+                              icon: const Icon(Icons.play_arrow, size: 16),
+                              label: const Text('Continuar'),
+                            ),
+                          TextButton.icon(
+                            onPressed: _resetTimer,
+                            icon: const Icon(Icons.replay, size: 16),
+                            label: const Text('Reiniciar'),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.swipe_rounded,
+                            size: 13,
+                            color:
+                                theme.colorScheme.onSurface.withAlpha(50)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Desliza para navegar',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color:
+                                theme.colorScheme.onSurface.withAlpha(50),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
             ),
           ),
@@ -888,9 +1069,8 @@ class _CookingModeScreenState extends State<_CookingModeScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: isFirst
-                          ? null
-                          : () => setState(() => _step--),
+                      onPressed:
+                          isFirst ? null : () => _goToStep(_step - 1),
                       icon: const Icon(Icons.arrow_back_rounded),
                       label: const Text('Anterior'),
                     ),
@@ -899,12 +1079,17 @@ class _CookingModeScreenState extends State<_CookingModeScreen> {
                   Expanded(
                     child: isLast
                         ? FilledButton.icon(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () async {
+                              await ref
+                                  .read(recipesProvider.notifier)
+                                  .markCooked(widget.recipe.id);
+                              if (context.mounted) Navigator.pop(context);
+                            },
                             icon: const Icon(Icons.check_rounded),
                             label: const Text('¡Listo!'),
                           )
                         : FilledButton.icon(
-                            onPressed: () => setState(() => _step++),
+                            onPressed: () => _goToStep(_step + 1),
                             icon: const Icon(Icons.arrow_forward_rounded),
                             label: const Text('Siguiente'),
                           ),
