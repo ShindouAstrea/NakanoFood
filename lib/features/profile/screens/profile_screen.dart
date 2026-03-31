@@ -16,6 +16,7 @@ class ProfileScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final user = ref.watch(currentUserProvider);
+    final String? userFullName = user?.identities?[0].identityData?["full_name"];
     final syncStatus = ref.watch(syncStatusProvider);
     final supabaseConfigured = SupabaseConfig.isConfigured;
 
@@ -47,7 +48,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  user?.email ?? 'Sin cuenta',
+                userFullName ?? 'Sin cuenta',
                   style: theme.textTheme.titleLarge
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),

@@ -66,13 +66,14 @@ class RecipeExploreService {
         .map(RecipeSuggestion.fromJson)
         .toList();
 
-    // Buscar imágenes en paralelo — fallback al nombre si no hay imageQuery
+    // Buscar imágenes en paralelo — dos intentos si el query específico falla
     return Future.wait(
       suggestions.map((s) async {
-        final query = (s.imageQuery?.isNotEmpty == true)
+        final specificQuery = (s.imageQuery?.isNotEmpty == true)
             ? s.imageQuery!
-            : '${s.name} ${s.type} food dish';
-        final url = await PexelsService.searchPhoto(query);
+            : '${s.name} food dish';
+        var url = await PexelsService.searchPhoto(specificQuery);
+        url ??= await PexelsService.searchPhoto('${s.type} food dish');
         return s.withImageUrl(url);
       }),
     );
@@ -150,9 +151,9 @@ $historySection
   * Termina siempre con "food" o "dish" o "meal".
   * Ejemplos buenos: "baked Chilean empanadas golden food", "creamy tomato soup bowl food", "grilled salmon lemon dish".
   * Ejemplos malos: "empanadas", "soup ingredients", "meat and vegetables".
-- `ingredients`: lista de 4-10 ingredientes con cantidad realista para 2-4 porciones.
+- `ingredients`: campo OBLIGATORIO. Lista de 4-10 ingredientes con cantidad realista para 2-4 porciones. NUNCA dejes este campo vacío ni lo omitas.
   * `unit` debe ser uno de: g, kg, ml, L, taza, cucharada, cucharadita, unidad, rodaja, pizca, sobre.
-- `steps`: lista de 4-8 pasos de preparación claros y concisos, en español.
+- `steps`: campo OBLIGATORIO. Lista de 4-8 pasos de preparación claros y concisos, en español. NUNCA dejes este campo vacío ni lo omitas.
 
 ## FORMATO DE RESPUESTA (obligatorio)
 
