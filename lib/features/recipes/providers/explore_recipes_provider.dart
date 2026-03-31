@@ -19,8 +19,9 @@ class ExploreSuggestionsNotifier
 
   Future<List<RecipeSuggestion>> _fetch() async {
     final typeFilter = ref.watch(exploreTypeFilterProvider);
-    final recipes = ref.watch(recipesProvider).valueOrNull ?? <Recipe>[];
-    final products = ref.watch(productsProvider).valueOrNull ?? [];
+    // read (no watch) para que agregar una receta no relance la búsqueda de IA
+    final recipes = ref.read(recipesProvider).valueOrNull ?? <Recipe>[];
+    final products = ref.read(productsProvider).valueOrNull ?? [];
 
     return RecipeExploreService.getSuggestions(
       savedRecipes: recipes,

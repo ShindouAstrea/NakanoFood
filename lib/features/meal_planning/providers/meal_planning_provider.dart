@@ -7,8 +7,11 @@ import '../../../core/services/sync_service.dart';
 import '../models/meal_category.dart';
 import '../models/meal_plan.dart';
 import '../models/meal_plan_item.dart';
+import 'notification_service.dart';
 
 const _uuid = Uuid();
+
+int _notificationId(String planId) => planId.hashCode & 0x7FFFFFFF;
 
 // ─── Meal Categories ──────────────────────────────────────────────────────────
 
@@ -134,12 +137,48 @@ class MealPlansNotifier extends AsyncNotifier<List<MealPlan>> {
     return plans;
   }
 
+  Future<void> _scheduleNotificationForPlan(MealPlan plan) async {
+    final db = await DatabaseHelper.instance.database;
+    final catMaps = await db.query(
+      'meal_categories',
+      where: 'id = ?',
+      whereArgs: [plan.categoryId],
+    );
+    if (catMaps.isEmpty) return;
+
+    final cat = MealCategory.fromMap(catMaps.first);
+    if (!cat.notificationEnabled || cat.defaultTime == null) return;
+
+    final timeParts = cat.defaultTime!.split(':');
+    if (timeParts.length != 2) return;
+    final hour = int.tryParse(timeParts[0]);
+    final minute = int.tryParse(timeParts[1]);
+    if (hour == null || minute == null) return;
+
+    final scheduledTime = DateTime(
+      plan.date.year,
+      plan.date.month,
+      plan.date.day,
+      hour,
+      minute,
+    );
+
+    await NotificationService.scheduleMealNotification(
+      id: _notificationId(plan.id),
+      categoryName: cat.name,
+      mealTitle: plan.displayTitle,
+      scheduledTime: scheduledTime,
+      minutesBefore: cat.notificationMinutesBefore,
+    );
+  }
+
   Future<void> addMealPlan(MealPlan plan) async {
     final db = await DatabaseHelper.instance.database;
     await db.insert('meal_plans', withSync(plan.toMap(), _uid));
     for (final item in plan.items) {
       await db.insert('meal_plan_items', withSync(item.toMap(), _uid));
     }
+    await _scheduleNotificationForPlan(plan);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();
   }
@@ -157,11 +196,14 @@ class MealPlansNotifier extends AsyncNotifier<List<MealPlan>> {
     for (final item in plan.items) {
       await db.insert('meal_plan_items', withSync(item.toMap(), _uid));
     }
+    await NotificationService.cancelNotification(_notificationId(plan.id));
+    await _scheduleNotificationForPlan(plan);
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();
   }
 
   Future<void> deleteMealPlan(String id) async {
+    await NotificationService.cancelNotification(_notificationId(id));
     final db = await DatabaseHelper.instance.database;
     await ref.read(syncServiceProvider).recordDeletion('meal_plans', id);
     await db.delete('meal_plans', where: 'id = ?', whereArgs: [id]);

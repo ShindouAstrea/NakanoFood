@@ -26,7 +26,7 @@ class SuggestionStep {
 
   factory SuggestionStep.fromJson(Map<String, dynamic> json) {
     return SuggestionStep(
-      step: json['step'] as int,
+      step: (json['step'] as num).toInt(),
       description: json['description'] as String,
     );
   }
@@ -62,7 +62,7 @@ class RecipeSuggestion {
       name: json['name'] as String,
       type: json['type'] as String,
       description: json['description'] as String,
-      estimatedMinutes: json['estimated_minutes'] as int?,
+      estimatedMinutes: (json['estimated_minutes'] as num?)?.toInt(),
       difficulty: json['difficulty'] as String?,
       reason: json['reason'] as String?,
       imageQuery: json['image_query'] as String?,
