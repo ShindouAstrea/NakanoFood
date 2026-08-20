@@ -6,7 +6,8 @@
     <!-- Permissions for notifications -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Sin USE_EXACT_ALARM: Google Play lo restringe a apps de despertador
+         o calendario. Los recordatorios usan alarmas inexactas. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

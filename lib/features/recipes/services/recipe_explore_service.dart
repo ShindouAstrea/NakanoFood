@@ -25,23 +25,19 @@ class RecipeExploreService {
     required List<Product> pantryProducts,
     String? typeFilter,
   }) async {
-    try {
-      final suggestions = await _fetchFromAI(
-        savedRecipes: savedRecipes,
-        pantryProducts: pantryProducts,
-        typeFilter: typeFilter,
-      );
-      if (typeFilter != null) {
-        return suggestions.where((s) => s.type == typeFilter).toList();
-      }
-      return suggestions;
-    } catch (_) {
-      final fallback = savedRecipes.isEmpty ? _mockPopular() : _mockPersonalized();
-      if (typeFilter != null) {
-        return fallback.where((s) => s.type == typeFilter).toList();
-      }
-      return fallback;
+    // Sin red de seguridad a propósito: antes, cualquier fallo devolvía
+    // recetas de ejemplo sin ingredientes ni pasos, y la pantalla las
+    // seguía anunciando como generadas con IA. El usuario las guardaba y
+    // se encontraba con una receta vacía. Mejor decir que falló.
+    final suggestions = await _fetchFromAI(
+      savedRecipes: savedRecipes,
+      pantryProducts: pantryProducts,
+      typeFilter: typeFilter,
+    );
+    if (typeFilter != null) {
+      return suggestions.where((s) => s.type == typeFilter).toList();
     }
+    return suggestions;
   }
 
   // ─── Lógica de IA ──────────────────────────────────────────────────────────
@@ -178,111 +174,4 @@ $historySection
 }
 ''';
   }
-
-  // ─── Mock data (fallback sin conexión) ─────────────────────────────────────
-
-  static List<RecipeSuggestion> _mockPopular() => [
-        const RecipeSuggestion(
-          name: 'Empanadas de Pino',
-          type: 'Snack',
-          description:
-              'Masa horneada rellena de pino (carne molida, cebolla, huevo duro, aceitunas y pasas).',
-          estimatedMinutes: 90,
-          difficulty: 'Medio',
-          reason: 'Ícono culinario de las Fiestas Patrias',
-        ),
-        const RecipeSuggestion(
-          name: 'Pastel de Choclo',
-          type: 'Comida Principal',
-          description:
-              'Costra de choclo fresco sobre pino de carne y pollo, gratinado al horno con azúcar.',
-          estimatedMinutes: 85,
-          difficulty: 'Medio',
-          reason: 'Favorito del verano chileno',
-        ),
-        const RecipeSuggestion(
-          name: 'Sopaipillas',
-          type: 'Snack',
-          description:
-              'Masa frita de harina y zapallo, crocante por fuera. Con pebre, salsa de tomate o chancaca.',
-          estimatedMinutes: 40,
-          difficulty: 'Fácil',
-          reason: 'Snack callejero más popular de Chile',
-        ),
-        const RecipeSuggestion(
-          name: 'Leche Asada',
-          type: 'Postre',
-          description:
-              'Crema suave horneada al baño maría con caramelo. El postre casero chileno más clásico.',
-          estimatedMinutes: 60,
-          difficulty: 'Fácil',
-          reason: 'Postre casero chileno más clásico',
-        ),
-        const RecipeSuggestion(
-          name: 'Charquicán',
-          type: 'Comida Principal',
-          description:
-              'Guiso seco de papas, zapallo y carne desmenuzada con verduras. Se sirve con huevo frito.',
-          estimatedMinutes: 45,
-          difficulty: 'Fácil',
-          reason: 'Receta chilena de la abuela',
-        ),
-        const RecipeSuggestion(
-          name: 'Mote con Huesillo',
-          type: 'Bebida',
-          description:
-              'Mote de trigo con duraznos deshidratados en almíbar de canela y clavo. Refresco nacional.',
-          estimatedMinutes: 30,
-          difficulty: 'Fácil',
-          reason: 'Bebida veraniega nacional de Chile',
-        ),
-        const RecipeSuggestion(
-          name: 'Humitas',
-          type: 'Snack',
-          description:
-              'Pasta de choclo con albahaca y cebolla, envuelta en hojas de maíz y cocida al vapor.',
-          estimatedMinutes: 90,
-          difficulty: 'Difícil',
-          reason: 'Tradición culinaria chilena de verano',
-        ),
-        const RecipeSuggestion(
-          name: 'Panqueques con Manjar',
-          type: 'Postre',
-          description:
-              'Panqueques delgados rellenos de manjar chileno, enrollados y espolvoreados con azúcar flor.',
-          estimatedMinutes: 25,
-          difficulty: 'Fácil',
-          reason: 'Postre favorito de la once en Chile',
-        ),
-        const RecipeSuggestion(
-          name: 'Anticuchos de Vacuno',
-          type: 'Snack',
-          description:
-              'Brochetas de vacuno marinadas en ají panca, ajo y comino, asadas a la parrilla.',
-          estimatedMinutes: 35,
-          difficulty: 'Fácil',
-          reason: 'Popular en fondas y asados chilenos',
-        ),
-        const RecipeSuggestion(
-          name: 'Milhojas de Crema',
-          type: 'Postre',
-          description:
-              'Capas de hojaldre crujiente rellenas de crema pastelera y manjar, cubiertas con azúcar flor.',
-          estimatedMinutes: 60,
-          difficulty: 'Difícil',
-          reason: 'Postre estrella de las pastelerías chilenas',
-        ),
-      ];
-
-  static List<RecipeSuggestion> _mockPersonalized() => [
-        const RecipeSuggestion(
-          name: 'Cupcake Proteínico',
-          type: 'Postre',
-          description: 'Cupcake a base de plátano con mantequilla de maní y berries.',
-          estimatedMinutes: 30,
-          difficulty: 'Fácil',
-          reason: 'Postre nutritivo y saludable',
-        ),
-        ..._mockPopular().take(9),
-      ];
 }

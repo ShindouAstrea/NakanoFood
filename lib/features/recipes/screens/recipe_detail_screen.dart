@@ -551,9 +551,12 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
               label: const Text('Compartir'),
               onPressed: () {
                 Navigator.pop(ctx);
-                Share.share(
-                  'Te comparto la receta "${recipe.name}" en NakanoFood 🍽️\n\nCódigo: $code\n\nÁbrela desde Recetas → Importar receta.',
-                  subject: recipe.name,
+                SharePlus.instance.share(
+                  ShareParams(
+                    text:
+                        'Te comparto la receta "${recipe.name}" en NakanoFood 🍽️\n\nCódigo: $code\n\nÁbrela desde Recetas → Importar receta.',
+                    subject: recipe.name,
+                  ),
                 );
               },
             ),
@@ -615,7 +618,9 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     buf.writeln();
     buf.write('Compartido desde NakanoFood 🥗');
 
-    Share.share(buf.toString(), subject: recipe.name);
+    SharePlus.instance.share(
+      ShareParams(text: buf.toString(), subject: recipe.name),
+    );
   }
 
   Future<void> _confirmDelete(

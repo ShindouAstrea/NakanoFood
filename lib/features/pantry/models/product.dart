@@ -194,6 +194,16 @@ class Product {
   final double currentQuantity;
   final String? lastPlace;
   final String? notes;
+
+  /// Equivalencia por unidad: a cuánto equivale UNA unidad de [unit] expresada
+  /// en [packageBaseUnit]. Ejemplo: un producto en 'paquete' que trae 1 kg se
+  /// guarda como packageSize 1 y packageBaseUnit 'kg'.
+  ///
+  /// Permite comparar la despensa con recetas escritas en otra unidad: sin
+  /// esto, 2 paquetes frente a una receta que pide 500 g no se pueden cruzar.
+  final double? packageSize;
+  final String? packageBaseUnit;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -215,6 +225,8 @@ class Product {
     this.currentQuantity = 0,
     this.lastPlace,
     this.notes,
+    this.packageSize,
+    this.packageBaseUnit,
     required this.createdAt,
     required this.updatedAt,
     this.categoryName,
@@ -227,6 +239,71 @@ class Product {
   bool get isOut => currentQuantity <= 0;
 
   double get pricePerUnit => priceRefQty > 0 ? lastPrice / priceRefQty : lastPrice;
+
+  /// True si el producto declara a cuánto equivale una de sus unidades.
+  bool get hasPackageEquivalence =>
+      packageSize != null && packageSize! > 0 && packageBaseUnit != null;
+
+  /// Convierte [quantity] de este producto a [targetUnit], o null si no se
+  /// puede afirmar la equivalencia.
+  ///
+  /// Devolver null a propósito en vez de un número aproximado: es preferible
+  /// mostrar "no se sabe" a decirle al usuario que le falta harina cuando le
+  /// sobra. Se resuelve en tres pasos:
+  ///   1. Misma unidad, nada que convertir.
+  ///   2. Conversión métrica directa (g↔kg, ml↔L).
+  ///   3. Vía la equivalencia declarada: 2 paquetes de 1 kg → 2 kg → 2000 g.
+  double? convertToRecipeUnit(double quantity, String targetUnit) {
+    final from = _canonicalUnit(unit);
+    final to = _canonicalUnit(targetUnit);
+    if (from == to) return quantity;
+
+    final direct = _metricFactor(from, to);
+    if (direct != null) return quantity * direct;
+
+    if (!hasPackageEquivalence) return null;
+
+    // Una unidad del producto equivale a packageSize de packageBaseUnit.
+    final base = _canonicalUnit(packageBaseUnit!);
+    final inBase = quantity * packageSize!;
+    if (base == to) return inBase;
+
+    final fromBase = _metricFactor(base, to);
+    return fromBase == null ? null : inBase * fromBase;
+  }
+
+  /// Normaliza sinónimos de unidad ('litro' y 'L' son lo mismo).
+  static String _canonicalUnit(String u) {
+    final s = u.trim().toLowerCase();
+    const synonyms = {
+      'litro': 'l',
+      'litros': 'l',
+      'gr': 'g',
+      'gramo': 'g',
+      'gramos': 'g',
+      'kilo': 'kg',
+      'kilos': 'kg',
+      'kilogramo': 'kg',
+      'kilogramos': 'kg',
+      'mililitro': 'ml',
+      'mililitros': 'ml',
+      'unidades': 'unidad',
+      'un': 'unidad',
+    };
+    return synonyms[s] ?? s;
+  }
+
+  /// Factor entre unidades métricas de la misma magnitud, null si no aplica.
+  static double? _metricFactor(String from, String to) {
+    const weight = {'g': 1.0, 'kg': 1000.0};
+    const volume = {'ml': 1.0, 'l': 1000.0};
+    for (final scale in [weight, volume]) {
+      final a = scale[from];
+      final b = scale[to];
+      if (a != null && b != null) return a / b;
+    }
+    return null;
+  }
 
   double get neededQuantity =>
       isLow ? (quantityToMaintain - currentQuantity) : 0;
@@ -244,6 +321,8 @@ class Product {
           (map['quantity_to_maintain'] as num?)?.toDouble() ?? 1,
       currentQuantity: (map['current_quantity'] as num?)?.toDouble() ?? 0,
       lastPlace: map['last_place'] as String?,
+      packageSize: (map['package_size'] as num?)?.toDouble(),
+      packageBaseUnit: map['package_base_unit'] as String?,
       notes: map['notes'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -265,6 +344,8 @@ class Product {
       'quantity_to_maintain': quantityToMaintain,
       'current_quantity': currentQuantity,
       'last_place': lastPlace,
+      'package_size': packageSize,
+      'package_base_unit': packageBaseUnit,
       'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -282,6 +363,8 @@ class Product {
     double? quantityToMaintain,
     double? currentQuantity,
     String? lastPlace,
+    double? packageSize,
+    String? packageBaseUnit,
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -303,6 +386,8 @@ class Product {
       quantityToMaintain: quantityToMaintain ?? this.quantityToMaintain,
       currentQuantity: currentQuantity ?? this.currentQuantity,
       lastPlace: lastPlace ?? this.lastPlace,
+      packageSize: packageSize ?? this.packageSize,
+      packageBaseUnit: packageBaseUnit ?? this.packageBaseUnit,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

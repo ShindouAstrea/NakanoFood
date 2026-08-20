@@ -5,6 +5,7 @@ import '../providers/pantry_provider.dart';
 import '../models/product.dart';
 import '../models/price_history_entry.dart';
 import 'add_edit_product_screen.dart';
+import '../../../shared/utils/number_input.dart';
 
 class ProductDetailScreen extends ConsumerWidget {
   final String productId;
@@ -595,8 +596,17 @@ class _QuantityUpdaterState extends ConsumerState<_QuantityUpdater> {
             icon: const Icon(Icons.check_rounded, size: 18),
             label: const Text('Guardar cantidad'),
             onPressed: () async {
-              final qty = double.tryParse(_ctrl.text);
-              if (qty == null) return;
+              // Antes: con "1,5" el parse fallaba y el botón no hacía nada,
+              // sin ningún aviso. El usuario lo pulsaba una y otra vez.
+              final qty = parseDecimal(_ctrl.text);
+              if (qty == null || qty < 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Escribe una cantidad válida, por ejemplo 1,5'),
+                  ),
+                );
+                return;
+              }
               final messenger = ScaffoldMessenger.of(context);
               await ref
                   .read(productsProvider.notifier)

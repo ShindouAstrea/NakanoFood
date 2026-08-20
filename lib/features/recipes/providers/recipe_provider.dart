@@ -7,6 +7,7 @@ import '../../../core/services/image_storage_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../models/recipe.dart';
 import '../../pantry/models/product.dart';
+import 'pantry_index.dart';
 
 const _uuid = Uuid();
 
@@ -230,45 +231,55 @@ final recipeWithAvailabilityProvider =
   final recipe = recipes.firstWhere((r) => r.id == recipeId);
   final db = await DatabaseHelper.instance.database;
 
-  final enrichedIngredients = <RecipeIngredient>[];
-  for (final ingredient in recipe.ingredients) {
-    if (ingredient.productId != null) {
-      final prodMaps = await db.query(
-        'products',
-        where: 'id = ?',
-        whereArgs: [ingredient.productId],
-        limit: 1,
-      );
-      if (prodMaps.isNotEmpty) {
-        final product = Product.fromMap(prodMaps.first);
-        enrichedIngredients.add(ingredient.copyWith(
-          availableQuantity: product.currentQuantity,
-          isAvailable: product.currentQuantity >= ingredient.quantity,
-        ));
-      } else {
-        enrichedIngredients
-            .add(ingredient.copyWith(availableQuantity: 0, isAvailable: false));
-      }
-    } else {
-      enrichedIngredients.add(ingredient.copyWith(isAvailable: null));
-    }
-  }
+  // Una sola lectura de la despensa en lugar de dos consultas por ingrediente.
+  final allProducts =
+      (await db.query('products')).map(Product.fromMap).toList();
+  final pantry = PantryIndex.from(allProducts);
 
+  final enrichedIngredients = <RecipeIngredient>[];
   double cost = 0;
-  for (final ing in enrichedIngredients) {
-    if (ing.productId != null) {
-      final prodMaps = await db.query(
-        'products',
-        where: 'id = ?',
-        whereArgs: [ing.productId],
-        limit: 1,
-      );
-      if (prodMaps.isNotEmpty) {
-        final product = Product.fromMap(prodMaps.first);
-        if (product.lastPrice > 0 && product.quantityToMaintain > 0) {
-          cost += (ing.quantity / product.quantityToMaintain) * product.lastPrice;
-        }
+
+  for (final ingredient in recipe.ingredients) {
+    final product = pantry.matchFor(ingredient);
+
+    if (product == null) {
+      // Sin equivalente en la despensa no se puede afirmar nada: se deja en
+      // desconocido en vez de marcarlo como faltante.
+      enrichedIngredients.add(ingredient.copyWith(isAvailable: null));
+      continue;
+    }
+
+    // Comparar en la unidad de la receta: 2 kg de harina frente a 500 g deben
+    // dar "alcanza". convertToRecipeUnit devuelve null cuando la equivalencia
+    // no se puede afirmar, y entonces se deja en desconocido en vez de mentir.
+    final availableInRecipeUnit =
+        product.convertToRecipeUnit(product.currentQuantity, ingredient.unit);
+
+    enrichedIngredients.add(ingredient.copyWith(
+      availableQuantity: availableInRecipeUnit ?? product.currentQuantity,
+      isAvailable: availableInRecipeUnit == null
+          ? null
+          : availableInRecipeUnit >= ingredient.quantity,
+    ));
+
+    // pricePerUnit (precio ÷ cantidad de referencia), no quantityToMaintain:
+    // ese es el stock objetivo y no tiene nada que ver con el precio. Usarlo
+    // dividía el costo de toda receta por el nivel de stock deseado.
+    //
+    // El precio está en la unidad del producto y la receta puede usar otra,
+    // así que primero se pasa la cantidad de la receta a unidades de producto:
+    // si 1 kg de harina rinde 1000 g, 200 g son 0,2 kg.
+    if (product.lastPrice > 0) {
+      final oneProductUnitInRecipeUnits =
+          product.convertToRecipeUnit(1, ingredient.unit);
+      if (oneProductUnitInRecipeUnits != null &&
+          oneProductUnitInRecipeUnits > 0) {
+        final quantityInProductUnits =
+            ingredient.quantity / oneProductUnitInRecipeUnits;
+        cost += quantityInProductUnits * product.pricePerUnit;
       }
+      // Si no se puede convertir no se suma nada: un costo omitido es menos
+      // dañino que uno inventado con un factor 1000 de error.
     }
   }
 

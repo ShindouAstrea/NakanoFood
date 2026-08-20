@@ -22,7 +22,11 @@ class DatabaseHelper {
         : join(await getDatabasesPath(), filePath);
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
+      // SQLite trae las foreign keys DESACTIVADAS en cada conexión: sin esto
+      // los ON DELETE CASCADE del esquema no se ejecutan y borrar una receta
+      // o un producto deja sus filas hijas huérfanas para siempre.
+      onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -129,6 +133,7 @@ class DatabaseHelper {
         )
       ''');
     }
+
     if (oldVersion < 6) {
       // Add sync columns to all root tables
       const syncTables = [
@@ -183,6 +188,27 @@ class DatabaseHelper {
         } catch (_) {}
       }
     }
+
+    // Nota: el bloque `oldVersion < 6` de arriba está fuera de orden respecto a
+    // los de 7-9. Hoy no rompe nada porque ninguno depende del anterior, pero
+    // conviene no añadir migraciones nuevas en medio. Las nuevas van aquí.
+
+    if (oldVersion < 10) {
+      // Equivalencia por unidad. Estas columnas ya existen en Supabase desde
+      // la 2.5.2, así que quien tenga datos allí los recupera al sincronizar.
+      // Se ignora el error de columna duplicada por si la BD local viene de
+      // una instalación de aquella versión.
+      for (final sql in const [
+        'ALTER TABLE products ADD COLUMN package_size REAL',
+        'ALTER TABLE products ADD COLUMN package_base_unit TEXT',
+      ]) {
+        try {
+          await db.execute(sql);
+        } catch (e) {
+          debugPrint('[DatabaseHelper] migración v10: $e');
+        }
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -224,6 +250,8 @@ class DatabaseHelper {
         current_quantity REAL DEFAULT 0,
         last_place TEXT,
         notes TEXT,
+        package_size REAL,
+        package_base_unit TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         user_id TEXT,

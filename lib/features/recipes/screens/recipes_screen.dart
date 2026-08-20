@@ -7,6 +7,7 @@ import '../services/recipe_share_service.dart';
 import '../widgets/recipe_card.dart';
 import 'add_edit_recipe_screen.dart';
 import 'explore_recipes_screen.dart';
+import 'what_can_i_cook_screen.dart';
 import 'recipe_detail_screen.dart';
 import '../../../shared/widgets/skeletons/recipe_card_skeleton.dart';
 
@@ -55,6 +56,15 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
       appBar: AppBar(
         title: const Text('Recetas'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.restaurant_menu_rounded),
+            tooltip: '¿Qué puedo cocinar?',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const WhatCanICookScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.auto_awesome_outlined),
             tooltip: 'Explorar recetas',

@@ -23,7 +23,7 @@ class NotificationService {
       android: androidSettings,
       iOS: iosSettings,
     );
-    await _plugin.initialize(settings);
+    await _plugin.initialize(settings: settings);
   }
 
   static Future<void> requestPermissions() async {
@@ -68,22 +68,24 @@ class NotificationService {
         NotificationDetails(android: androidDetails, iOS: iosDetails);
 
     await _plugin.zonedSchedule(
-      id,
-      '🍽️ $categoryName',
-      minutesBefore > 0
+      id: id,
+      title: '🍽️ $categoryName',
+      body: minutesBefore > 0
           ? 'En $minutesBefore min: $mealTitle'
           : mealTitle,
-      tz.TZDateTime.from(notifyTime, tz.local),
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      scheduledDate: tz.TZDateTime.from(notifyTime, tz.local),
+      notificationDetails: details,
+      // Inexacto a propósito: las alarmas exactas requieren USE_EXACT_ALARM,
+      // que Google Play restringe a apps de despertador/calendario. Android
+      // puede retrasar el aviso unos minutos, aceptable para un recordatorio
+      // de comida.
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
   }
 
   static Future<void> cancelNotification(int id) async {
     if (kIsWeb) return;
-    await _plugin.cancel(id);
+    await _plugin.cancel(id: id);
   }
 
   static Future<void> cancelAllNotifications() async {

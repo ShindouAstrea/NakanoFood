@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/shopping_provider.dart';
+import '../providers/budget_provider.dart';
 import '../models/shopping_session.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/utils/currency.dart';
+import '../../../shared/utils/number_input.dart';
 
 String _fmtN(double v) =>
     v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
@@ -33,20 +35,201 @@ class ShoppingHistoryScreen extends ConsumerWidget {
               .where((s) => s.status == ShoppingStatus.completed)
               .toList();
 
+          // La tarjeta de presupuesto va siempre primera; el gráfico solo si
+          // hay compras cerradas que graficar.
+          const budgetSlots = 1;
+          final chartSlots = completed.isNotEmpty ? 1 : 0;
+          final headerSlots = budgetSlots + chartSlots;
+
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: sessions.length + (completed.isNotEmpty ? 1 : 0),
+            itemCount: sessions.length + headerSlots,
             itemBuilder: (_, i) {
-              if (i == 0 && completed.isNotEmpty) {
+              if (i == 0) return const _BudgetCard();
+              if (chartSlots == 1 && i == 1) {
                 return _SpendingChart(sessions: completed);
               }
-              final session = sessions[completed.isNotEmpty ? i - 1 : i];
+              final session = sessions[i - headerSlots];
               return _SessionCard(session: session);
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
+      ),
+    );
+  }
+}
+
+// ─── Presupuesto mensual ──────────────────────────────────────────────────────
+
+class _BudgetCard extends ConsumerWidget {
+  const _BudgetCard();
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, double? actual) async {
+    final ctrl = TextEditingController(
+      text: actual != null ? actual.round().toString() : '',
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Presupuesto mensual'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ingresa tu presupuesto mensual de compras:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(prefixText: '\$ '),
+              onSubmitted: (v) => Navigator.pop(dialogContext, v),
+            ),
+          ],
+        ),
+        actions: [
+          if (actual != null)
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, ''),
+              child: const Text('Quitar'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, ctrl.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    // null = cancelado; cadena vacía = quitar el presupuesto.
+    if (result == null) return;
+    await ref
+        .read(monthlyBudgetProvider.notifier)
+        .setBudget(parseDecimal(result));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final statusAsync = ref.watch(budgetStatusProvider);
+    final budget = ref.watch(monthlyBudgetProvider).valueOrNull;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        onTap: () => _edit(context, ref, budget),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          child: statusAsync.when(
+            loading: () => const SizedBox(
+              height: 56,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (_, __) => const SizedBox(
+              height: 56,
+              child: Center(child: Text('No se pudo cargar el presupuesto')),
+            ),
+            data: (status) {
+              if (status == null) {
+                // Sin presupuesto definido: invitación, no error.
+                return Row(
+                  children: [
+                    Icon(Icons.savings_outlined, color: cs.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Presupuesto mensual',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Define un presupuesto mensual para controlar '
+                            'tus gastos.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurface.withAlpha(150),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                );
+              }
+
+              // El color comunica el estado sin depender de leer la cifra.
+              final Color barColor = status.isExceeded
+                  ? cs.error
+                  : status.isNearLimit
+                      ? const Color(0xFFB26B00)
+                      : cs.primary;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Presupuesto de ${clp(status.budget)}',
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Text(
+                        '${status.percentUsed} % del presupuesto',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: barColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      // Se corta en 1 para que la barra no desborde, el
+                      // exceso se dice con palabras justo debajo.
+                      value: status.ratio.clamp(0.0, 1.0),
+                      minHeight: 8,
+                      backgroundColor: cs.onSurface.withAlpha(28),
+                      valueColor: AlwaysStoppedAnimation(barColor),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    status.isExceeded
+                        ? 'Superaste el presupuesto en '
+                            '${clp(status.exceededBy)}'
+                        : 'Llevas ${clp(status.spent)} este mes · '
+                            'te quedan ${clp(status.remaining)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: status.isExceeded
+                          ? cs.error
+                          : cs.onSurface.withAlpha(150),
+                      fontWeight:
+                          status.isExceeded ? FontWeight.w600 : null,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../models/recipe_suggestion.dart';
 import '../providers/explore_recipes_provider.dart';
 import '../providers/recipe_provider.dart';
 import '../../../shared/widgets/skeletons/shimmer_box.dart';
+import '../../../core/services/openai_service.dart';
 
 const _uuid = Uuid();
 
@@ -114,22 +115,38 @@ class ExploreRecipesScreen extends ConsumerWidget {
             child: suggestionsAsync.when(
               loading: () => const _LoadingList(),
               error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline_rounded,
-                        size: 48, color: colorScheme.error),
-                    const SizedBox(height: 12),
-                    Text('No se pudieron cargar sugerencias',
-                        style: theme.textTheme.bodyMedium),
-                    const SizedBox(height: 8),
-                    FilledButton.tonal(
-                      onPressed: () => ref
-                          .read(exploreSuggestionsProvider.notifier)
-                          .refresh(),
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline_rounded,
+                          size: 48, color: colorScheme.error),
+                      const SizedBox(height: 12),
+                      Text('No se pudieron cargar sugerencias',
+                          style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      // Solo el mensaje preparado para el usuario. El detalle
+                      // técnico del servicio queda en los logs, no en pantalla.
+                      Text(
+                        e is OpenAIException
+                            ? e.message
+                            : 'No se pudieron generar sugerencias. '
+                                'Inténtalo de nuevo.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurface.withAlpha(150),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonal(
+                        onPressed: () => ref
+                            .read(exploreSuggestionsProvider.notifier)
+                            .refresh(),
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               data: (suggestions) {

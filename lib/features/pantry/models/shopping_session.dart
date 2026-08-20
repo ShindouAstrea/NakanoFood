@@ -137,8 +137,17 @@ class ShoppingSession {
 
   int get purchasedCount => items.where((i) => i.isPurchased).length;
   int get totalCount => items.length;
-  double get calculatedTotal =>
-      items.fold(0, (sum, item) => sum + item.totalCost);
+
+  /// Gasto real: solo lo marcado como comprado.
+  ///
+  /// Antes sumaba todos los ítems, y como una sesión arranca con la despensa
+  /// entera, los no comprados aportaban su precio *estimado*. Una compra de
+  /// tres productos aparecía como decenas de miles de más, y el gráfico de
+  /// gasto mensual heredaba el error. Coincide con el `total_cost` que
+  /// `completeSession` guarda al cerrar.
+  double get calculatedTotal => items
+      .where((i) => i.isPurchased)
+      .fold(0, (sum, item) => sum + item.totalCost);
 
   factory ShoppingSession.fromMap(Map<String, dynamic> map) {
     return ShoppingSession(

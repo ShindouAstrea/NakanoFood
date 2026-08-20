@@ -1,6 +1,7 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -88,6 +89,48 @@ class SyncService {
     );
   }
 
+  /// Clave donde se recuerda quién fue el último usuario que sincronizó
+  /// en este dispositivo.
+  static const _lastUserKey = 'sync_last_user_id';
+
+  /// Aísla los datos entre cuentas en un mismo dispositivo.
+  ///
+  /// Sin esto, al cerrar sesión no se limpiaba nada y ninguna consulta local
+  /// filtra por `user_id`: la siguiente persona que iniciaba sesión veía la
+  /// despensa, las recetas y el historial de compras de la anterior. Y si
+  /// editaba cualquier fila, `_claimLocalRecords` se la acababa atribuyendo,
+  /// subiendo datos ajenos a su cuenta.
+  ///
+  /// Debe llamarse ANTES de `fullUpload`, porque es ahí donde se reclaman las
+  /// filas huérfanas.
+  Future<void> prepareForUser() async {
+    if (userId == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastUser = prefs.getString(_lastUserKey);
+
+    // lastUser == null es un dispositivo que nunca sincronizó: sus datos
+    // locales son de quien acaba de entrar (venía de "usar sin cuenta"), así
+    // que se conservan y se reclaman como suyos.
+    if (lastUser != null && lastUser != userId) {
+      debugPrint('[SyncService] cambio de cuenta: se limpian los datos locales');
+      try {
+        final db = await DatabaseHelper.instance.database;
+        for (final table in [..._uploadOrder.reversed, 'pending_deletes']) {
+          try {
+            await db.delete(table);
+          } catch (e) {
+            debugPrint('[SyncService] no se pudo limpiar $table: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('[SyncService] error limpiando datos locales: $e');
+      }
+    }
+
+    await prefs.setString(_lastUserKey, userId!);
+  }
+
   /// Full upload: push all local rows to Supabase (used after login).
   Future<void> fullUpload() async {
     if (userId == null || !SupabaseConfig.isConfigured) return;
@@ -99,10 +142,28 @@ class SyncService {
       await _claimLocalRecords(db, userId!);
       await _syncDeletions(db, userId!);
       await _uploadPendingImages(db, userId!);
+
+      // Cada tabla se aísla: si una falla (un desajuste de esquema, un dato
+      // que el servidor rechaza), las demás se siguen respaldando. Antes una
+      // sola excepción abortaba el bucle y todo lo que venía después —
+      // recetas, planificación, compras — no se subía nunca.
+      final failedTables = <String>[];
       for (final table in _uploadOrder) {
-        await _uploadTable(db, table, userId!);
+        try {
+          await _uploadTable(db, table, userId!);
+        } catch (e) {
+          debugPrint('[SyncService] fullUpload: falló la tabla $table: $e');
+          failedTables.add(table);
+        }
       }
-      ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
+
+      if (failedTables.isNotEmpty) {
+        debugPrint(
+            '[SyncService] fullUpload incompleto. Tablas sin subir: ${failedTables.join(", ")}');
+      }
+      ref.read(syncStatusProvider.notifier).state =
+          failedTables.isEmpty ? SyncStatus.idle : SyncStatus.error;
+      // Se notifica igualmente: lo que sí subió debe refrescar la UI.
       ref.read(syncCompletionCountProvider.notifier).update((v) => v + 1);
     } catch (e, st) {
       debugPrint('[SyncService] fullUpload error: $e\n$st');
@@ -124,10 +185,24 @@ class SyncService {
     ref.read(syncStatusProvider.notifier).state = SyncStatus.syncing;
     try {
       final db = await DatabaseHelper.instance.database;
+      // Mismo aislamiento que en la subida: una tabla problemática no puede
+      // impedir que se restaure el resto.
+      final failedTables = <String>[];
       for (final table in _uploadOrder) {
-        await _downloadTable(db, table, userId!);
+        try {
+          await _downloadTable(db, table, userId!);
+        } catch (e) {
+          debugPrint('[SyncService] fullDownload: falló la tabla $table: $e');
+          failedTables.add(table);
+        }
       }
-      ref.read(syncStatusProvider.notifier).state = SyncStatus.idle;
+
+      if (failedTables.isNotEmpty) {
+        debugPrint(
+            '[SyncService] fullDownload incompleto. Tablas sin descargar: ${failedTables.join(", ")}');
+      }
+      ref.read(syncStatusProvider.notifier).state =
+          failedTables.isEmpty ? SyncStatus.idle : SyncStatus.error;
       ref.read(syncCompletionCountProvider.notifier).update((v) => v + 1);
     } catch (e, st) {
       debugPrint('[SyncService] fullDownload error: $e\n$st');
@@ -281,10 +356,20 @@ class SyncService {
     final cleaned = rows.map((r) => _prepareForSupabase(r, uid, table)).toList();
     await _client.from(table).upsert(cleaned);
 
+    // Solo se sellan las filas que de verdad se subieron. Antes el UPDATE
+    // marcaba todo lo que tuviera synced_at IS NULL en ese momento, así que
+    // lo que el usuario escribiera durante el viaje de red quedaba marcado
+    // como sincronizado sin haber salido — y la siguiente descarga lo
+    // sobrescribía con la versión vieja del servidor.
+    final uploadedIds =
+        rows.map((r) => r['id']).whereType<String>().toList(growable: false);
+    if (uploadedIds.isEmpty) return;
+
     final now = DateTime.now().toIso8601String();
+    final placeholders = List.filled(uploadedIds.length, '?').join(', ');
     await db.execute(
-      'UPDATE $table SET synced_at = ? WHERE synced_at IS NULL AND (user_id = ? OR user_id IS NULL)',
-      [now, uid],
+      'UPDATE $table SET synced_at = ? WHERE id IN ($placeholders)',
+      [now, ...uploadedIds],
     );
   }
 
@@ -301,10 +386,17 @@ class SyncService {
     await _client.from(table).upsert(cleaned);
 
     if (await _hasColumn(db, table, 'synced_at')) {
+      // Acotado a las filas subidas, no a toda la tabla: cualquier cosa que
+      // el usuario escriba mientras dura el upsert debe seguir pendiente.
+      final uploadedIds =
+          rows.map((r) => r['id']).whereType<String>().toList(growable: false);
+      if (uploadedIds.isEmpty) return;
+
       final now = DateTime.now().toIso8601String();
+      final placeholders = List.filled(uploadedIds.length, '?').join(', ');
       await db.execute(
-        'UPDATE $table SET synced_at = ? WHERE user_id = ?',
-        [now, uid],
+        'UPDATE $table SET synced_at = ? WHERE id IN ($placeholders)',
+        [now, ...uploadedIds],
       );
     }
   }
@@ -354,11 +446,20 @@ class SyncService {
         map.putIfAbsent(entry.key, () => entry.value);
       }
       try {
-        await db.insert(
+        // Deliberadamente NO se usa ConflictAlgorithm.replace: en SQLite eso
+        // es INSERT OR REPLACE, que BORRA la fila antes de reinsertarla. Con
+        // las foreign keys activas ese borrado cascadea y se lleva por delante
+        // los hijos (nutricionales, ingredientes, pasos…) que quizá todavía no
+        // están en el servidor. Actualizar en sitio conserva la fila.
+        final updated = await db.update(
           table,
           map,
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          where: 'id = ?',
+          whereArgs: [map['id']],
         );
+        if (updated == 0) {
+          await db.insert(table, map);
+        }
       } catch (e) {
         debugPrint('[SyncService] _downloadTable insert error for $table: $e');
       }
@@ -369,6 +470,16 @@ class SyncService {
   static const _localOnlyColumns = <String, List<String>>{
     // meal_plans had title + recipe_id before v5 migration; SQLite can't DROP COLUMN
     'meal_plans': ['title', 'recipe_id'],
+    // Estas tablas llevan updated_at en SQLite pero no en Supabase. Enviarlo
+    // hacía que PostgREST rechazara el lote entero con PGRST204 y, al no haber
+    // try por tabla, se abortaba el resto de la subida.
+    // Comprobado contra el esquema real del proyecto el 19-08-2026, no contra
+    // supabase/migrations/, que está desactualizado.
+    'nutritional_values': ['updated_at'],
+    'product_price_history': ['updated_at'],
+    'recipe_ingredients': ['updated_at'],
+    'recipe_steps': ['updated_at'],
+    'recipe_images': ['updated_at'],
   };
 
   /// Default values for local-only NOT NULL columns when inserting downloaded rows.

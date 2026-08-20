@@ -6,6 +6,7 @@ import '../models/product.dart';
 import '../providers/pantry_provider.dart';
 import '../services/open_food_facts_service.dart';
 import '../widgets/barcode_scanner_sheet.dart';
+import '../../../shared/utils/number_input.dart';
 
 const _uuid = Uuid();
 
@@ -35,10 +36,16 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
   late final TextEditingController _newCategoryCtrl;
   late final TextEditingController _newSubcategoryCtrl;
 
+  late final TextEditingController _packageSizeCtrl;
+
   String? _selectedCategoryId;
   String? _selectedSubcategoryId;
   String _selectedUnit = 'unidad';
+  String? _packageBaseUnit;
   bool _showNutritional = false;
+
+  /// Unidades a las que tiene sentido equivaler un envase.
+  static const _baseUnits = ['g', 'kg', 'ml', 'L', 'unidad'];
 
   // Nutritional controllers
   final _kcalCtrl = TextEditingController();
@@ -77,9 +84,14 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
     _notesCtrl = TextEditingController(text: p?.notes ?? '');
     _newCategoryCtrl = TextEditingController();
     _newSubcategoryCtrl = TextEditingController();
+    _packageSizeCtrl = TextEditingController(
+        text: p?.packageSize != null ? _fmtN(p!.packageSize!) : '');
     _selectedCategoryId = p?.categoryId;
     _selectedSubcategoryId = p?.subcategoryId;
     _selectedUnit = p?.unit ?? 'unidad';
+    // Solo se acepta si está entre las opciones, si no el Dropdown revienta.
+    _packageBaseUnit =
+        _baseUnits.contains(p?.packageBaseUnit) ? p!.packageBaseUnit : null;
 
     if (p?.nutritionalValues != null) {
       final nv = p!.nutritionalValues!;
@@ -108,6 +120,7 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
     _currentQuantityCtrl.dispose();
     _lastPlaceCtrl.dispose();
     _notesCtrl.dispose();
+    _packageSizeCtrl.dispose();
     _newCategoryCtrl.dispose();
     _newSubcategoryCtrl.dispose();
     _kcalCtrl.dispose();
@@ -185,11 +198,13 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
       categoryId: _selectedCategoryId!,
       subcategoryId: _selectedSubcategoryId,
       unit: _selectedUnit,
-      lastPrice: double.tryParse(_lastPriceCtrl.text) ?? 0,
-      priceRefQty: double.tryParse(_priceRefQtyCtrl.text) ?? 1.0,
+      lastPrice: parseDecimal(_lastPriceCtrl.text) ?? 0,
+      priceRefQty: parseDecimal(_priceRefQtyCtrl.text) ?? 1.0,
       quantityToMaintain:
-          double.tryParse(_quantityToMaintainCtrl.text) ?? 1,
-      currentQuantity: double.tryParse(_currentQuantityCtrl.text) ?? 0,
+          parseDecimal(_quantityToMaintainCtrl.text) ?? 1,
+      currentQuantity: parseDecimal(_currentQuantityCtrl.text) ?? 0,
+      packageSize: parseDecimal(_packageSizeCtrl.text),
+      packageBaseUnit: _packageBaseUnit,
       lastPlace: _lastPlaceCtrl.text.trim().isEmpty
           ? null
           : _lastPlaceCtrl.text.trim(),
@@ -396,11 +411,10 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                         decimal: true),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Requerido';
-                      if (double.tryParse(v) == null) return 'Inválido';
-                      return null;
-                    },
+                    // allowZero: mantener 0 de un producto es legítimo, pero
+                    // la coma decimal y los negativos sí deben avisar.
+                    validator: (v) =>
+                        validatePositiveNumber(v, allowZero: true),
                   ),
                 ),
               ],
@@ -445,7 +459,78 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
                         .withAlpha(120),
                   ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 20),
+
+            // ── Equivalencia por unidad ──────────────────────────────────
+            // Permite decir que 1 "paquete" trae 1 kg, para poder comparar la
+            // despensa con recetas escritas en otra unidad.
+            Text(
+              'Equivalencia por unidad (opcional)',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Cuánto contiene 1 $_selectedUnit. Sirve para saber si te alcanza '
+              'para una receta que use otra unidad.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withAlpha(120),
+                  ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _packageSizeCtrl,
+                    decoration: InputDecoration(
+                      labelText: '1 $_selectedUnit equivale a',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    validator: (v) =>
+                        validatePositiveNumber(v, required: false),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _packageBaseUnit,
+                    decoration: const InputDecoration(labelText: 'Unidad base'),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('—'),
+                      ),
+                      ...(_baseUnits.map((u) => DropdownMenuItem<String>(
+                            value: u,
+                            child: Text(u),
+                          ))),
+                    ],
+                    onChanged: (v) => setState(() => _packageBaseUnit = v),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Ej: 1 paquete equivale a 1 kg',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withAlpha(120),
+                  ),
+            ),
+
+            const SizedBox(height: 20),
             TextFormField(
               controller: _lastPlaceCtrl,
               decoration: const InputDecoration(

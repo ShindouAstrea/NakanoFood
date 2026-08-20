@@ -74,6 +74,10 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
           Future.any([
             Future(() async {
               final sync = ref.read(syncServiceProvider);
+              // Antes que nada: si en este dispositivo había sesión de otra
+              // cuenta, se limpian sus datos para que no acaben atribuidos
+              // ni visibles para quien entra ahora.
+              await sync.prepareForUser();
               await sync.fullUpload();
               await sync.fullDownload();
             }),

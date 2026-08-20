@@ -17,7 +17,9 @@ void main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   try {
-    await dotenv.load(fileName: '.env');
+    // isOptional: sin él, un .env ausente o vacío deja a dotenv sin
+    // inicializar y cualquier lectura posterior lanza.
+    await dotenv.load(fileName: '.env', isOptional: true);
   } catch (_) {
     // En producción web las credenciales vienen de --dart-define
   }
@@ -26,14 +28,22 @@ void main() async {
     databaseFactory = databaseFactoryFfiWeb;
   }
 
-  if (SupabaseConfig.isConfigured) {
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      anonKey: SupabaseConfig.anonKey,
-    );
+  // Nada de lo que sigue puede impedir que se pinte algo: el splash nativo
+  // está retenido y solo lo libera la primera pantalla. Si esto lanzara, la
+  // app quedaría congelada en el splash para siempre, sin ningún mensaje.
+  try {
+    if (SupabaseConfig.isConfigured) {
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        publishableKey: SupabaseConfig.anonKey,
+      );
+    }
+    await initializeDateFormatting('es', null);
+  } catch (e, st) {
+    debugPrint('[main] fallo de arranque: $e\n$st');
+    // Se sigue adelante: la app arranca en modo local, que es mejor que
+    // una pantalla azul eterna.
   }
-
-  await initializeDateFormatting('es', null);
 
   runApp(
     const ProviderScope(

@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../models/recipe.dart';
 import '../providers/recipe_provider.dart';
 import '../../pantry/providers/pantry_provider.dart';
+import '../../../shared/utils/number_input.dart';
 
 const _uuid = Uuid();
 
@@ -123,7 +124,7 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
               recipeId: recipeId,
               productId: ing.productId,
               productName: ing.nameCtrl.text.trim(),
-              quantity: double.tryParse(ing.qtyCtrl.text) ?? 1,
+              quantity: parseDecimal(ing.qtyCtrl.text) ?? 1,
               unit: ing.unit,
             ))
         .toList();
@@ -156,9 +157,9 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
           ? null
           : _descCtrl.text.trim(),
       mainImagePath: _mainImagePath,
-      portions: int.tryParse(_portionsCtrl.text) ?? 1,
-      prepTime: int.tryParse(_prepTimeCtrl.text),
-      cookTime: int.tryParse(_cookTimeCtrl.text),
+      portions: parseInteger(_portionsCtrl.text) ?? 1,
+      prepTime: parseInteger(_prepTimeCtrl.text),
+      cookTime: parseInteger(_cookTimeCtrl.text),
       notes: _notesCtrl.text.trim().isEmpty
           ? null
           : _notesCtrl.text.trim(),
@@ -294,8 +295,9 @@ class _AddEditRecipeScreenState extends ConsumerState<AddEditRecipeScreen> {
                       prefixIcon: Icon(Icons.people_outline),
                     ),
                     keyboardType: TextInputType.number,
-                    validator: (v) =>
-                        v?.trim().isEmpty == true ? 'Requerido' : null,
+                    // Antes solo comprobaba que no estuviera vacío: "0" o
+                    // "abc" pasaban y se guardaban como 0 o como 1.
+                    validator: (v) => validatePositiveNumber(v),
                   ),
                 ),
                 const SizedBox(width: 12),
