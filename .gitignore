@@ -31,7 +31,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+build/
 /coverage/
 
 # Symbolication related
@@ -47,3 +47,14 @@ app.*.map.json
 .env
 # Widget Preview related
 .widget_preview/
+
+# Build caches (Gradle / Xcode) - nunca versionar
+.gradle/
+*.stackdump
+
+# Archivos generados / locales por maquina
+**/android/local.properties
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Supabase CLI local state
+supabase/.temp/
