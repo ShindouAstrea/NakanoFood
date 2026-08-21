@@ -63,30 +63,16 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
     // Add all products as shopping items (prioritize low stock)
     final items = <ShoppingItem>[];
     for (final product in products) {
-      final catName = categories
-          .firstWhere(
-            (c) => c.id == product.categoryId,
-            orElse: () => const ProductCategory(id: '', name: 'Sin categoría'),
-          )
-          .name;
-
       final neededQty = product.isLow
           ? product.neededQuantity
           : product.quantityToMaintain;
 
-      final item = ShoppingItem(
-        id: _uuid.v4(),
+      final item = _itemFor(
         sessionId: session.id,
-        productId: product.id,
-        productName: product.name,
-        plannedQuantity: neededQty > 0 ? neededQty : product.quantityToMaintain,
-        unit: product.unit,
-        plannedPrice: product.pricePerUnit,
-        categoryId: product.categoryId,
-        categoryName: catName,
-        subcategoryId: product.subcategoryId,
-        subcategoryName: product.subcategoryName,
-        lastPlace: product.lastPlace,
+        product: product,
+        categories: categories,
+        quantity:
+            neededQty > 0 ? neededQty : product.quantityToMaintain,
       );
       items.add(item);
       await db.insert('shopping_items', withSync(item.toMap(), _uid));
@@ -96,6 +82,120 @@ class ActiveSessionNotifier extends AsyncNotifier<ShoppingSession?> {
     state = AsyncValue.data(fullSession);
     ref.read(syncServiceProvider).queueSync();
     return fullSession;
+  }
+
+  /// Arma la lista con lo que falta para cocinar el plan de comidas.
+  ///
+  /// Recibe cuánto comprar por producto ya calculado: quien sabe de recetas y
+  /// de calendarios es el plan, no la despensa. Aquí solo se escribe la
+  /// sesión, con los mismos ítems que cualquier otra compra, para que el
+  /// resto de la pantalla —agrupar por pasillo, marcar comprado, cerrar la
+  /// compra— funcione sin enterarse de dónde salió la lista.
+  Future<ShoppingSession> startSessionFromPlan(
+    Map<String, double> quantityByProductId, {
+    String? notes,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final products = await ref.read(productsProvider.future);
+    final categories = await ref.read(categoriesProvider.future);
+    final productsById = {for (final p in products) p.id: p};
+
+    final session = ShoppingSession(
+      id: _uuid.v4(),
+      createdAt: DateTime.now(),
+      status: ShoppingStatus.active,
+      notes: notes,
+    );
+    await db.insert('shopping_sessions', withSync(session.toMap(), _uid));
+
+    final items = <ShoppingItem>[];
+    for (final entry in quantityByProductId.entries) {
+      final product = productsById[entry.key];
+      // Un producto borrado entre que se calculó la lista y se confirmó no
+      // puede entrar: el ítem guarda su nombre y su categoría.
+      if (product == null || entry.value <= 0) continue;
+
+      final item = _itemFor(
+        sessionId: session.id,
+        product: product,
+        categories: categories,
+        quantity: entry.value,
+      );
+      items.add(item);
+      await db.insert('shopping_items', withSync(item.toMap(), _uid));
+    }
+
+    final fullSession = session.copyWith(items: items);
+    state = AsyncValue.data(fullSession);
+    ref.read(syncServiceProvider).queueSync();
+    return fullSession;
+  }
+
+  /// Un ítem de la lista a partir de un producto de la despensa.
+  ///
+  /// El ítem se queda con una copia del nombre, la categoría y el pasillo:
+  /// el historial tiene que seguir leyéndose aunque el producto cambie o se
+  /// borre después.
+  ShoppingItem _itemFor({
+    required String sessionId,
+    required Product product,
+    required List<ProductCategory> categories,
+    required double quantity,
+  }) {
+    final catName = categories
+        .firstWhere(
+          (c) => c.id == product.categoryId,
+          orElse: () => const ProductCategory(id: '', name: 'Sin categoría'),
+        )
+        .name;
+
+    return ShoppingItem(
+      id: _uuid.v4(),
+      sessionId: sessionId,
+      productId: product.id,
+      productName: product.name,
+      plannedQuantity: quantity,
+      unit: product.unit,
+      plannedPrice: product.pricePerUnit,
+      categoryId: product.categoryId,
+      categoryName: catName,
+      subcategoryId: product.subcategoryId,
+      subcategoryName: product.subcategoryName,
+      lastPlace: product.lastPlace,
+    );
+  }
+
+  /// Agrega un producto a la lista de compras en curso.
+  ///
+  /// La lista se arma como una foto de la despensa al abrir el carrito, así
+  /// que un producto creado después no aparecía por ningún lado: había que
+  /// abandonar la compra y empezarla de nuevo solo para verlo.
+  ///
+  /// Devuelve el ítem agregado, o null si el producto ya estaba en la lista o
+  /// si no hay compra abierta.
+  Future<ShoppingItem?> addProductToSession(
+    Product product, {
+    double? quantity,
+  }) async {
+    final session = state.valueOrNull;
+    if (session == null) return null;
+    if (session.items.any((i) => i.productId == product.id)) return null;
+
+    final db = await DatabaseHelper.instance.database;
+    final categories = await ref.read(categoriesProvider.future);
+
+    final item = _itemFor(
+      sessionId: session.id,
+      product: product,
+      categories: categories,
+      quantity: quantity ??
+          (product.quantityToMaintain > 0 ? product.quantityToMaintain : 1),
+    );
+    await db.insert('shopping_items', withSync(item.toMap(), _uid));
+
+    state = AsyncData(session.copyWith(items: [...session.items, item]));
+    ref.read(syncServiceProvider).queueSync();
+    return item;
   }
 
   Future<void> markItemPurchased({

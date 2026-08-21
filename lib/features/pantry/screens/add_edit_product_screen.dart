@@ -376,14 +376,14 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 4,
-              children: [
-                'unidad', 'g', 'kg', 'ml', 'L',
-                'lata', 'botella', 'caja', 'bolsa', 'paquete',
-              ].map((u) => ChoiceChip(
-                    label: Text(u),
-                    selected: _selectedUnit == u,
-                    onSelected: (_) => setState(() => _selectedUnit = u),
-                  )).toList(),
+              children: productUnits
+                  .map((u) => ChoiceChip(
+                        label: Text(u),
+                        selected: _selectedUnit == u,
+                        onSelected: (_) =>
+                            setState(() => _selectedUnit = u),
+                      ))
+                  .toList(),
             ),
             const SizedBox(height: 16),
 

@@ -9,7 +9,11 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/recipe_provider.dart';
 import '../models/recipe.dart';
 import '../services/recipe_share_service.dart';
+import '../widgets/cook_deduction_sheet.dart';
+import '../../pantry/providers/pantry_provider.dart';
 import '../../pantry/screens/shopping_screen.dart';
+import '../../pantry/widgets/product_picker.dart';
+import '../../pantry/widgets/quick_add_product.dart';
 import 'add_edit_recipe_screen.dart';
 
 
@@ -56,7 +60,10 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
       context,
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => _CookingModeScreen(recipe: recipe),
+        builder: (_) => _CookingModeScreen(
+          recipe: recipe,
+          multiplier: _portionMultiplier,
+        ),
       ),
     ).then((_) => WakelockPlus.disable());
   }
@@ -329,22 +336,12 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: () async {
-                              await ref
-                                  .read(recipesProvider.notifier)
-                                  .markCooked(recipe.id);
-                              ref.invalidate(recipeWithAvailabilityProvider(
-                                  widget.recipeId));
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                        '¡Registrado! La receta fue marcada como cocinada hoy.'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
+                            onPressed: () => confirmCooked(
+                              context,
+                              ref,
+                              recipe: recipe,
+                              multiplier: _portionMultiplier,
+                            ),
                             icon: const Icon(Icons.check_circle_outline,
                                 size: 18),
                             label: const Text('Preparé esta receta hoy'),
@@ -650,18 +647,47 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
   }
 }
 
-class _IngredientRow extends StatelessWidget {
+class _IngredientRow extends ConsumerWidget {
   final RecipeIngredient ingredient;
   final double multiplier;
 
   const _IngredientRow(
       {required this.ingredient, required this.multiplier});
 
+  /// Deja el ingrediente apuntando a un producto de la despensa.
+  ///
+  /// Hace falta cuando la receta lo llama distinto —"papas medianas" contra
+  /// "Papas"—: sin esto la app no puede saber que son lo mismo, y no descuenta
+  /// ni calcula costo ni lo pone en la lista de compras del plan.
+  Future<void> _link(BuildContext context, WidgetRef ref) async {
+    final recipes = ref.read(recipesProvider.notifier);
+    final products = await ref.read(productsProvider.future);
+    if (!context.mounted) return;
+
+    final product = await pickPantryProduct(
+      context,
+      products: products,
+      initialQuery: ingredient.productName,
+      onCreate: (query) => quickAddProduct(context, ref, initialName: query),
+    );
+    if (product == null) return;
+
+    await recipes.linkIngredient(
+      ingredientId: ingredient.id,
+      productId: product.id,
+    );
+    ref.invalidate(recipeWithAvailabilityProvider(ingredient.recipeId));
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final adjustedQty = ingredient.quantity * multiplier;
     final available = ingredient.availableQuantity;
     final isAvailable = ingredient.isAvailable;
+    // availableQuantity solo queda en null cuando no se encontró producto:
+    // si se encontró pero las unidades no se pueden equiparar, se guarda su
+    // stock igual. Vincular arregla el primer caso, no el segundo.
+    final unlinked = available == null;
 
     Color dotColor;
     if (isAvailable == null) {
@@ -701,6 +727,15 @@ class _IngredientRow extends StatelessWidget {
             Icon(Icons.warning_amber_rounded,
                 size: 16, color: Colors.red.shade400),
           ],
+          if (unlinked)
+            IconButton(
+              icon: const Icon(Icons.link_rounded, size: 18),
+              tooltip: 'Vincular con un producto de la despensa',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              onPressed: () => _link(context, ref),
+            ),
         ],
       ),
     );
@@ -799,7 +834,12 @@ class _InfoChip extends StatelessWidget {
 
 class _CookingModeScreen extends ConsumerStatefulWidget {
   final Recipe recipe;
-  const _CookingModeScreen({required this.recipe});
+
+  /// El multiplicador de porciones elegido en el detalle: al terminar se
+  /// descuenta lo que se ocupó de verdad, no lo que dice la receta base.
+  final double multiplier;
+
+  const _CookingModeScreen({required this.recipe, required this.multiplier});
 
   @override
   ConsumerState<_CookingModeScreen> createState() => _CookingModeScreenState();
@@ -1085,9 +1125,12 @@ class _CookingModeScreenState extends ConsumerState<_CookingModeScreen> {
                     child: isLast
                         ? FilledButton.icon(
                             onPressed: () async {
-                              await ref
-                                  .read(recipesProvider.notifier)
-                                  .markCooked(widget.recipe.id);
+                              await confirmCooked(
+                                context,
+                                ref,
+                                recipe: widget.recipe,
+                                multiplier: widget.multiplier,
+                              );
                               if (context.mounted) Navigator.pop(context);
                             },
                             icon: const Icon(Icons.check_rounded),

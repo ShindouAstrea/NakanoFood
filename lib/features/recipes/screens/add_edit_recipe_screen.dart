@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../models/recipe.dart';
 import '../providers/recipe_provider.dart';
 import '../../pantry/providers/pantry_provider.dart';
+import '../../pantry/widgets/product_picker.dart';
 import '../../../shared/utils/number_input.dart';
 
 const _uuid = Uuid();
@@ -619,9 +620,10 @@ class _IngredientAutocomplete extends ConsumerWidget {
       initialValue: TextEditingValue(text: entry.nameCtrl.text),
       optionsBuilder: (textEditingValue) {
         if (textEditingValue.text.isEmpty) return const [];
-        final query = textEditingValue.text.toLowerCase();
-        return products
-            .where((p) => p.name.toLowerCase().contains(query))
+        // Palabra por palabra: quien escribe "papas medianas" tiene que ver
+        // "Papas", que es como está en la despensa. Con un contains de la
+        // frase entera no aparecía y el ingrediente quedaba sin vincular.
+        return matchingProducts(products, textEditingValue.text)
             .map((p) => p.name)
             .take(5)
             .toList();

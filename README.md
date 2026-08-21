@@ -11,6 +11,11 @@ Aplicación móvil Flutter para gestión de despensa, recetas y planificación a
 - Control de cantidad actual vs cantidad a mantener
 - Indicador visual de stock bajo
 - **Ir de Compras**: Lista organizada por áreas/pasillos, priorizando productos bajos
+- **Comprar para el plan**: arma la lista con lo que falta para cocinar las
+  comidas planificadas (3, 7 o 14 días), restando lo que ya hay en la despensa
+- **Agregar sobre la marcha**: si en el pasillo ves algo que no está en la
+  lista, se busca, se crea con lo mínimo (nombre, categoría, unidad) y entra
+  en la compra abierta, sin abandonar el carrito
 - Marcar productos comprados con cantidad y precio real
 - Historial de compras con comparación de carritos
 - Cancelar compra sin actualizar inventario
@@ -24,6 +29,12 @@ Aplicación móvil Flutter para gestión de despensa, recetas y planificación a
 - Verificación de ingredientes disponibles en despensa
 - **Recalcular porciones**: ½x, 1x, 2x, 3x
 - Costo estimado basado en precios de despensa
+- **Descontar de la despensa** al marcar una receta como cocinada: convierte
+  las unidades de la receta a las del producto, respeta el multiplicador de
+  porciones y deja ajustar cada cantidad antes de confirmar
+- **Vincular ingrediente con producto**: cuando la receta lo llama distinto
+  ("papas medianas" contra "Papas"), se vincula una vez y queda guardado en
+  la receta, para el descuento, el costo y la lista de compras
 - Edición y eliminación de recetas
 
 ### 📅 Planificación Alimentaria

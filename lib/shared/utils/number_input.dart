@@ -66,3 +66,32 @@ String normalizeName(String value) {
   // Colapsa espacios internos repetidos
   return buffer.toString().replaceAll(RegExp(r'\s+'), ' ');
 }
+
+/// Redondea una cantidad al milésimo.
+///
+/// La aritmética en coma flotante deja restos: descontar 0,2 kg de 3 kg da
+/// 2,8000000000000003, y ese número termina guardado en la despensa y escrito
+/// en pantalla. Mil es suficiente para gramos y mililitros, que es el detalle
+/// más fino que la app maneja.
+double roundQuantity(double value) {
+  if (!value.isFinite) return 0;
+  // Fuera de este rango no hay cantidad de despensa que signifique algo, y
+  // multiplicar por mil antes de redondear se saldría del entero de 64 bits.
+  if (value.abs() > 1e12) return value.isNegative ? -1e12 : 1e12;
+  return (value * 1000).round() / 1000;
+}
+
+/// Escribe una cantidad como se lee en es-CL: sin decimales si es entera, con
+/// los mínimos necesarios si no, y con coma.
+///
+/// Va en pareja con [parseDecimal], que acepta de vuelta tanto la coma como el
+/// punto: lo que se muestra en un campo se puede volver a leer de ahí.
+String formatQuantity(double value) {
+  final rounded = roundQuantity(value);
+  final text = rounded == rounded.roundToDouble()
+      ? rounded.toStringAsFixed(0)
+      : rounded
+          .toStringAsFixed(3)
+          .replaceFirst(RegExp(r'0+$'), '');
+  return text.replaceAll('.', ',');
+}

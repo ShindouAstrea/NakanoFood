@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -12,11 +13,21 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Camera & Storage permissions for image picker -->
+    <!-- Cámara: la usa mobile_scanner para leer códigos de barras. -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- Sin permisos de almacenamiento ni de medios: elegir fotos pasa por el
+         Android Photo Picker (ImagePickerAndroid.useAndroidPhotoPicker en
+         main.dart), que entrega un URI ya autorizado. Google Play prohíbe
+         READ_MEDIA_IMAGES/READ_MEDIA_VIDEO cuando el selector del sistema
+         basta. Los tools:node="remove" evitan que alguna dependencia los
+         reintroduzca al fusionar manifiestos. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"
+        tools:node="remove" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+        tools:node="remove" />
 
     <application
         android:label="NakanoFood"

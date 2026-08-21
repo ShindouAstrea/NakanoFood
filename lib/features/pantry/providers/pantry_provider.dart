@@ -4,6 +4,7 @@ import '../../../core/database/database_helper.dart';
 import '../../../core/database/db_write_helper.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/sync_service.dart';
+import '../../../shared/utils/number_input.dart';
 import '../models/product.dart';
 import '../models/price_history_entry.dart';
 
@@ -190,6 +191,58 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
       where: 'id = ?',
       whereArgs: [productId],
     );
+    ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
+  }
+
+  /// Descuenta de la despensa lo que se consumió, por ejemplo al cocinar.
+  ///
+  /// Recibe cuánto restar por producto, en unidades del producto, y lo aplica
+  /// todo en una transacción: escribir producto a producto dejaba la despensa
+  /// a medio actualizar si algo fallaba a la mitad, y disparaba un sync por
+  /// cada uno.
+  ///
+  /// El stock nunca baja de cero. Un negativo no significa nada en una
+  /// despensa y contaminaría el costo estimado y la predicción de consumo,
+  /// que multiplican por la cantidad guardada.
+  Future<void> consumeQuantities(Map<String, double> amountByProductId) async {
+    if (amountByProductId.isEmpty) return;
+
+    final db = await DatabaseHelper.instance.database;
+    final now = DateTime.now().toIso8601String();
+
+    await db.transaction((txn) async {
+      for (final entry in amountByProductId.entries) {
+        if (entry.value <= 0) continue;
+
+        // Se relee el stock dentro de la transacción en vez de confiar en el
+        // que traía la pantalla: entre que se abrió la receta y se confirmó,
+        // el usuario pudo editar el producto o entrar un sync.
+        final rows = await txn.query(
+          'products',
+          columns: ['current_quantity'],
+          where: 'id = ?',
+          whereArgs: [entry.key],
+          limit: 1,
+        );
+        if (rows.isEmpty) continue;
+
+        final current = (rows.first['current_quantity'] as num?)?.toDouble() ?? 0;
+        final left = current - entry.value;
+
+        await txn.update(
+          'products',
+          {
+            'current_quantity': left > 0 ? roundQuantity(left) : 0,
+            'updated_at': now,
+            'synced_at': null,
+          },
+          where: 'id = ?',
+          whereArgs: [entry.key],
+        );
+      }
+    });
+
     ref.invalidateSelf();
     ref.read(syncServiceProvider).queueSync();
   }

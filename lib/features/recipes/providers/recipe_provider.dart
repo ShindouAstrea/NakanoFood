@@ -214,6 +214,31 @@ class RecipesNotifier extends AsyncNotifier<List<Recipe>> {
     ref.read(syncServiceProvider).queueSync();
   }
 
+  /// Vincula un ingrediente de la receta con un producto de la despensa.
+  ///
+  /// El cruce automático es por nombre, y las recetas llaman a las cosas como
+  /// se cocinan, no como se compran: "papas medianas" no va a cruzar con
+  /// "Papas" por mucho que se normalice, y ninguna regla automática debería
+  /// atreverse a decidirlo. Con el vínculo guardado el nombre deja de
+  /// importar: se descuenta al cocinar, se calcula el costo y entra en la
+  /// lista de compras del plan.
+  ///
+  /// Se guarda en la receta y no en el momento: vale para la próxima vez.
+  Future<void> linkIngredient({
+    required String ingredientId,
+    required String productId,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.update(
+      'recipe_ingredients',
+      withSync({'product_id': productId}, _uid),
+      where: 'id = ?',
+      whereArgs: [ingredientId],
+    );
+    ref.invalidateSelf();
+    ref.read(syncServiceProvider).queueSync();
+  }
+
   Future<void> deleteRecipe(String id) async {
     final db = await DatabaseHelper.instance.database;
     await ref.read(syncServiceProvider).recordDeletion('recipes', id);
@@ -270,12 +295,9 @@ final recipeWithAvailabilityProvider =
     // así que primero se pasa la cantidad de la receta a unidades de producto:
     // si 1 kg de harina rinde 1000 g, 200 g son 0,2 kg.
     if (product.lastPrice > 0) {
-      final oneProductUnitInRecipeUnits =
-          product.convertToRecipeUnit(1, ingredient.unit);
-      if (oneProductUnitInRecipeUnits != null &&
-          oneProductUnitInRecipeUnits > 0) {
-        final quantityInProductUnits =
-            ingredient.quantity / oneProductUnitInRecipeUnits;
+      final quantityInProductUnits =
+          product.convertFromRecipeUnit(ingredient.quantity, ingredient.unit);
+      if (quantityInProductUnits != null) {
         cost += quantityInProductUnits * product.pricePerUnit;
       }
       // Si no se puede convertir no se suma nada: un costo omitido es menos

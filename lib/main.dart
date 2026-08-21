@@ -9,12 +9,14 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/supabase_config.dart';
+import 'core/services/photo_picker_setup.dart';
 import 'app.dart';
 
 void main() async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) FlutterNativeSplash.preserve(widgetsBinding: binding);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  configurePhotoPicker();
 
   try {
     // isOptional: sin él, un .env ausente o vacío deja a dotenv sin

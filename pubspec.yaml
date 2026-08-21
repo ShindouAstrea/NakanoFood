@@ -3,7 +3,7 @@ description: NakanoFood - Gestión de despensa, recetas y planificación aliment
 
 publish_to: 'none'
 
-version: 2.5.3+12
+version: 2.7.4+14
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -28,6 +28,10 @@ dependencies:
 
   # Image
   image_picker: ^1.1.2
+  # Directo (no transitivo) solo para activar el Android Photo Picker:
+  # sin él la app tendría que declarar READ_MEDIA_IMAGES, que Play rechaza.
+  image_picker_android: ^0.8.13
+  image_picker_platform_interface: ^2.11.0
   mobile_scanner: ^7.2.0 #5.2.3 break
   # Calendar
   table_calendar: ^3.1.2

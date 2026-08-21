@@ -5,6 +5,9 @@ import '../providers/pantry_provider.dart';
 import '../providers/consumption_prediction_provider.dart';
 import '../models/shopping_session.dart';
 import '../widgets/shopping_item_tile.dart';
+import '../widgets/plan_shopping_sheet.dart';
+import '../widgets/quick_add_product.dart';
+import '../../../shared/utils/number_input.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/utils/currency.dart';
 import 'shopping_history_screen.dart';
@@ -97,7 +100,7 @@ class _NoActiveSession extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Se incluirán todos los productos de tu despensa,\npriorizando los que están por agotarse.',
+            'Repón la despensa entera, o compra solo lo que falta\npara las comidas que tienes planificadas.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurface.withAlpha(120),
               height: 1.5,
@@ -108,7 +111,13 @@ class _NoActiveSession extends ConsumerWidget {
           FilledButton.icon(
             onPressed: onStart,
             icon: const Icon(Icons.add_shopping_cart, size: 18),
-            label: const Text('Iniciar nueva compra'),
+            label: const Text('Reponer la despensa'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => startShoppingForPlan(context),
+            icon: const Icon(Icons.calendar_month_outlined, size: 18),
+            label: const Text('Comprar para el plan'),
           ),
 
           // Prediction summary panel
@@ -216,6 +225,44 @@ class _ActiveSessionState extends ConsumerState<_ActiveSession> {
     super.dispose();
   }
 
+  /// Mete en la compra en curso algo que no estaba en la lista.
+  ///
+  /// El caso es ver un producto en el pasillo y querer empezar a llevarle la
+  /// cuenta: antes había que abandonar el carrito, crearlo en la despensa y
+  /// volver a empezar la compra, porque la lista ya estaba armada.
+  Future<void> _addFromSearch(String query) async {
+    final notifier = ref.read(activeSessionProvider.notifier);
+    final products = await ref.read(productsProvider.future);
+    if (!mounted) return;
+
+    // Puede existir ya en la despensa sin estar en esta lista —creado después
+    // de abrir el carrito, o desde otra pantalla—: reutilizarlo es mejor que
+    // dejar dos productos iguales para siempre.
+    final existing = products
+        .where((p) =>
+            normalizeName(p.name) == normalizeName(query) &&
+            !widget.session.items.any((i) => i.productId == p.id))
+        .firstOrNull;
+
+    final product =
+        existing ?? await quickAddProduct(context, ref, initialName: query);
+    if (product == null || !mounted) return;
+
+    final item = await notifier.addProductToSession(product);
+    if (!mounted) return;
+
+    _searchCtrl.clear();
+    setState(() => _searchQuery = '');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(item == null
+            ? '${product.name} ya estaba en la lista'
+            : '${product.name} se agregó a la lista'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final itemsByCatAsync = ref.watch(shoppingItemsByCategoryProvider);
@@ -292,6 +339,7 @@ class _ActiveSessionState extends ConsumerState<_ActiveSession> {
                   query: _searchQuery,
                   byCat: byCat,
                   categoryColorMap: categoryColorMap,
+                  onAdd: () => _addFromSearch(_searchQuery),
                   onItemTap: (item) => _handleItemTap(context, ref, item),
                   onSwipeMark: (item) => ref
                       .read(activeSessionProvider.notifier)
@@ -792,6 +840,7 @@ class _SearchResultsView extends StatelessWidget {
   final Map<String, Color> categoryColorMap;
   final void Function(ShoppingItem) onItemTap;
   final Future<void> Function(ShoppingItem) onSwipeMark;
+  final VoidCallback onAdd;
 
   const _SearchResultsView({
     required this.query,
@@ -799,6 +848,7 @@ class _SearchResultsView extends StatelessWidget {
     required this.categoryColorMap,
     required this.onItemTap,
     required this.onSwipeMark,
+    required this.onAdd,
   });
 
   @override
@@ -838,6 +888,14 @@ class _SearchResultsView extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurface.withAlpha(120),
               ),
+            ),
+            const SizedBox(height: 16),
+            // No encontrarlo aquí suele significar que aún no existe: se crea
+            // y se agrega a esta misma compra, sin abandonar el carrito.
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text('Agregar "$query"'),
             ),
           ],
         ),

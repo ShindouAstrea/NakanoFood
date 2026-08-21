@@ -182,6 +182,25 @@ class NutritionalValues {
   }
 }
 
+/// Unidades en que se guarda un producto de la despensa.
+///
+/// Viven aquí y no en la pantalla porque las ofrecen dos sitios —la ficha
+/// completa y el alta rápida— y tienen que ser las mismas: un producto dado
+/// de alta con una unidad que la ficha no ofrece no se puede volver a editar
+/// sin cambiarla.
+const List<String> productUnits = [
+  'unidad',
+  'g',
+  'kg',
+  'ml',
+  'L',
+  'lata',
+  'botella',
+  'caja',
+  'bolsa',
+  'paquete',
+];
+
 class Product {
   final String id;
   final String name;
@@ -270,6 +289,19 @@ class Product {
 
     final fromBase = _metricFactor(base, to);
     return fromBase == null ? null : inBase * fromBase;
+  }
+
+  /// Cuántas unidades de este producto son [quantity] de [recipeUnit].
+  ///
+  /// Inverso de [convertToRecipeUnit], y lo que hace falta para descontar: la
+  /// receta pide 200 g, la despensa guarda la harina en kg, y del stock hay
+  /// que restar 0,2. Devuelve null exactamente en los mismos casos y por la
+  /// misma razón: restar con un factor inventado vacía la despensa de golpe,
+  /// y un error de 1000 aquí es la diferencia entre un gramo y un kilo.
+  double? convertFromRecipeUnit(double quantity, String recipeUnit) {
+    final oneUnitInRecipeUnits = convertToRecipeUnit(1, recipeUnit);
+    if (oneUnitInRecipeUnits == null || oneUnitInRecipeUnits == 0) return null;
+    return quantity / oneUnitInRecipeUnits;
   }
 
   /// Normaliza sinónimos de unidad ('litro' y 'L' son lo mismo).
