@@ -7,6 +7,7 @@ import '../../../core/services/image_storage_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../models/recipe.dart';
 import '../../pantry/models/product.dart';
+import '../../pantry/providers/unit_conversion_provider.dart';
 import 'pantry_index.dart';
 
 const _uuid = Uuid();
@@ -259,7 +260,8 @@ final recipeWithAvailabilityProvider =
   // Una sola lectura de la despensa en lugar de dos consultas por ingrediente.
   final allProducts =
       (await db.query('products')).map(Product.fromMap).toList();
-  final pantry = PantryIndex.from(allProducts);
+  final pantry =
+      PantryIndex.from(allProducts, converter: ref.watch(unitConverterProvider));
 
   final enrichedIngredients = <RecipeIngredient>[];
   double cost = 0;
@@ -278,7 +280,7 @@ final recipeWithAvailabilityProvider =
     // dar "alcanza". convertToRecipeUnit devuelve null cuando la equivalencia
     // no se puede afirmar, y entonces se deja en desconocido en vez de mentir.
     final availableInRecipeUnit =
-        product.convertToRecipeUnit(product.currentQuantity, ingredient.unit);
+        pantry.availableFor(ingredient);
 
     enrichedIngredients.add(ingredient.copyWith(
       availableQuantity: availableInRecipeUnit ?? product.currentQuantity,
@@ -295,8 +297,9 @@ final recipeWithAvailabilityProvider =
     // así que primero se pasa la cantidad de la receta a unidades de producto:
     // si 1 kg de harina rinde 1000 g, 200 g son 0,2 kg.
     if (product.lastPrice > 0) {
-      final quantityInProductUnits =
-          product.convertFromRecipeUnit(ingredient.quantity, ingredient.unit);
+      final quantityInProductUnits = product.convertFromRecipeUnit(
+          ingredient.quantity, ingredient.unit,
+          converter: pantry.converter);
       if (quantityInProductUnits != null) {
         cost += quantityInProductUnits * product.pricePerUnit;
       }

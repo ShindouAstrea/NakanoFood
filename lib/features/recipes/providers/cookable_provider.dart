@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/recipe.dart';
 import '../../pantry/providers/pantry_provider.dart';
+import '../../pantry/providers/unit_conversion_provider.dart';
 import 'pantry_index.dart';
 import 'recipe_provider.dart';
 
@@ -40,7 +41,8 @@ class Cookable {
 final cookableRecipesProvider = FutureProvider<List<Cookable>>((ref) async {
   final recipes = await ref.watch(recipesProvider.future);
   final products = await ref.watch(productsProvider.future);
-  final pantry = PantryIndex.from(products);
+  final pantry =
+      PantryIndex.from(products, converter: ref.watch(unitConverterProvider));
 
   final result = <Cookable>[];
   for (final recipe in recipes) {

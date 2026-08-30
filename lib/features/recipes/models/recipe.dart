@@ -125,6 +125,16 @@ const List<String> recipeTypes = [
   'Otro',
 ];
 
+/// Unidades que ofrece el editor de recetas.
+///
+/// El conversor entiende bastantes más —abreviaturas, plurales, medidas
+/// imperiales, envases— porque las recetas también llegan importadas y
+/// generadas por IA, y ahí la unidad viene escrita como venga. Esta lista es
+/// solo lo que se ofrece al escribir a mano, así que va corta a propósito:
+/// una lista de cuarenta unidades no se lee, se sufre.
+///
+/// El orden importa en dos sitios: 'g' es el primero porque es el que se usa
+/// de reserva cuando la unidad del producto no está aquí.
 const List<String> commonUnits = [
   'g',
   'kg',
@@ -134,9 +144,18 @@ const List<String> commonUnits = [
   'cucharada',
   'cucharadita',
   'unidad',
+  'diente',
   'rodaja',
+  'rebanada',
+  'hoja',
+  'rama',
+  'lata',
+  'vaso',
+  'gota',
   'pizca',
+  'puñado',
   'sobre',
+  'al gusto',
 ];
 
 const List<String> pantryUnits = [

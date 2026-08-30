@@ -1,6 +1,8 @@
 import '../models/recipe.dart';
+import '../../pantry/data/unit_conversion_seed.dart';
 import '../../pantry/models/product.dart';
 import '../../../shared/utils/number_input.dart';
+import '../../../shared/utils/unit_conversion.dart';
 
 /// Cruce entre los ingredientes de una receta y los productos de la despensa.
 ///
@@ -11,9 +13,21 @@ class PantryIndex {
   final Map<String, Product> _byName;
   final Map<String, Product> _bySingular;
 
-  const PantryIndex._(this._byId, this._byName, this._bySingular);
+  /// Las equivalencias de unidad con las que se cruza la despensa.
+  ///
+  /// Va en el índice y no como argumento de cada llamada porque las tres
+  /// pantallas que preguntan —el detalle de la receta, "¿Qué puedo cocinar?" y
+  /// el descuento al cocinar— tienen que responder lo mismo, y con un conversor
+  /// distinto cada una responderían cosas distintas.
+  final UnitConverter converter;
 
-  factory PantryIndex.from(List<Product> products) {
+  const PantryIndex._(
+      this._byId, this._byName, this._bySingular, this.converter);
+
+  factory PantryIndex.from(
+    List<Product> products, {
+    UnitConverter? converter,
+  }) {
     final byId = {for (final p in products) p.id: p};
     // Con nombres normalizados repetidos gana el primero: cruzar con uno de
     // ellos es preferible a no cruzar nada.
@@ -24,7 +38,8 @@ class PantryIndex {
       byName.putIfAbsent(name, () => p);
       bySingular.putIfAbsent(_withoutPlural(name), () => p);
     }
-    return PantryIndex._(byId, byName, bySingular);
+    return PantryIndex._(
+        byId, byName, bySingular, converter ?? seededConverter);
   }
 
   /// Quita la ese final para poder comparar singular con plural.
@@ -61,12 +76,21 @@ class PantryIndex {
   ///
   /// Null cuando no se puede afirmar: no hay producto, o las unidades no son
   /// convertibles y el producto no declara su equivalencia.
-  double? availableFor(RecipeIngredient ingredient) {
+  /// Trae también la marca de si el número se apoya en una equivalencia
+  /// estimada, para poder escribir "≈ 2 tazas" en vez de "2 tazas".
+  UnitAmount? availableAmountFor(RecipeIngredient ingredient) {
     final product = matchFor(ingredient);
     if (product == null) return null;
-    return product.convertToRecipeUnit(
-        product.currentQuantity, ingredient.unit);
+    return product.amountInRecipeUnit(
+      product.currentQuantity,
+      ingredient.unit,
+      converter: converter,
+    );
   }
+
+  /// [availableAmountFor] cuando solo interesa el número.
+  double? availableFor(RecipeIngredient ingredient) =>
+      availableAmountFor(ingredient)?.value;
 
   /// True/false si se puede afirmar, null si no hay información suficiente.
   ///

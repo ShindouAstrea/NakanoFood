@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nakano_food/core/database/database_helper.dart';
 import 'package:nakano_food/features/pantry/providers/pantry_provider.dart';
 import 'package:nakano_food/features/pantry/providers/shopping_provider.dart';
+import 'package:nakano_food/features/pantry/providers/unit_conversion_provider.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -269,6 +270,81 @@ void main() {
       });
 
       expect(session.items.map((i) => i.productId), ['p-harina']);
+    });
+  });
+
+  group('declarar una equivalencia de unidad', () {
+    test('queda escrita, canonizada y pendiente de sync', () async {
+      await seed(id: 'p-eq-azucar', name: 'Azúcar', quantity: 2);
+      final scope = container();
+
+      await scope.read(unitConversionsProvider.notifier).declare(
+            productId: 'p-eq-azucar',
+            fromQty: 1,
+            fromUnit: 'Cucharadas', // escrito como venga
+            toQty: 14,
+            toUnit: 'gr',
+          );
+
+      final db = await DatabaseHelper.instance.database;
+      final saved = (await db.query('unit_conversions',
+              where: 'product_id = ?', whereArgs: ['p-eq-azucar']))
+          .single;
+
+      expect(saved['from_unit'], 'cucharada');
+      expect(saved['to_unit'], 'g');
+      expect(saved['to_qty'], 14);
+      expect(saved['synced_at'], isNull);
+    });
+
+    test('declararla otra vez corrige, no acumula', () async {
+      await seed(id: 'p-eq-harina', name: 'Harina', quantity: 1);
+      final scope = container();
+      final notifier = scope.read(unitConversionsProvider.notifier);
+
+      await notifier.declare(
+          productId: 'p-eq-harina',
+          fromQty: 1,
+          fromUnit: 'taza',
+          toQty: 120,
+          toUnit: 'g');
+      await scope.read(unitConversionsProvider.future);
+      await notifier.declare(
+          productId: 'p-eq-harina',
+          fromQty: 1,
+          fromUnit: 'taza',
+          toQty: 130,
+          toUnit: 'g');
+
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.query('unit_conversions',
+          where: 'product_id = ?', whereArgs: ['p-eq-harina']);
+
+      expect(rows, hasLength(1));
+      expect(rows.single['to_qty'], 130);
+    });
+
+    test('el conversor la usa, y le gana al catálogo', () async {
+      await seed(id: 'p-eq-arroz', name: 'Arroz', unit: 'kg', quantity: 2);
+      final scope = container();
+
+      // El catálogo dice 185 g por taza; esta despensa dice 200.
+      await scope.read(unitConversionsProvider.notifier).declare(
+            productId: 'p-eq-arroz',
+            fromQty: 1,
+            fromUnit: 'taza',
+            toQty: 200,
+            toUnit: 'g',
+          );
+      await scope.read(unitConversionsProvider.future);
+
+      final products = await scope.read(productsProvider.future);
+      final arroz = products.firstWhere((p) => p.id == 'p-eq-arroz');
+      final amount = arroz.amountInProductUnit(2, 'taza',
+          converter: scope.read(unitConverterProvider));
+
+      expect(amount!.value, 0.4); // 2 × 200 g, no 2 × 185
+      expect(amount.isEstimate, isFalse);
     });
   });
 }

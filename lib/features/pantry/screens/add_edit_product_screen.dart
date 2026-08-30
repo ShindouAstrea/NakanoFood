@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../providers/pantry_provider.dart';
+import '../providers/unit_conversion_provider.dart';
 import '../services/open_food_facts_service.dart';
 import '../widgets/barcode_scanner_sheet.dart';
+import '../widgets/unit_equivalence_sheet.dart';
 import '../../../shared/utils/number_input.dart';
 
 const _uuid = Uuid();
@@ -62,6 +64,37 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
   bool _loadingBarcode = false;
 
   bool get isEditing => widget.product != null;
+
+  /// Acceso a las equivalencias de cocina de este producto.
+  ///
+  /// No es un campo del formulario: se guardan solas al declararlas, y no
+  /// esperan al botón de guardar. Meterlas en el `Product` habría obligado a
+  /// que declarar una equivalencia desde la hoja de "la cociné" —que no tiene
+  /// este formulario delante— pasara por aquí.
+  Widget _equivalencesTile() {
+    final product = widget.product!;
+    final conversions = ref.watch(
+        productConversionsProvider((id: product.id, name: product.name)));
+    final cs = Theme.of(context).colorScheme;
+
+    return OutlinedButton.icon(
+      onPressed: () =>
+          manageUnitEquivalences(context, ref, product: product),
+      icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+      label: Text(
+        conversions.isEmpty
+            ? 'Equivalencias de cocina (cucharadas, tazas…)'
+            : '${conversions.length} '
+                '${conversions.length == 1 ? 'equivalencia' : 'equivalencias'} '
+                'de cocina',
+      ),
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        minimumSize: const Size(double.infinity, 48),
+        foregroundColor: conversions.isEmpty ? cs.onSurface : cs.primary,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -529,6 +562,18 @@ class _AddEditProductScreenState extends ConsumerState<AddEditProductScreen> {
                         .withAlpha(120),
                   ),
             ),
+
+            // ── Equivalencias de cocina ──────────────────────────────────
+            // El campo de arriba dice qué trae el envase; esto dice cuánto es
+            // una cucharada o una taza de este ingrediente, que es lo que
+            // hace falta cuando la receta mide en volumen y la despensa pesa.
+            //
+            // Solo al editar: las equivalencias cuelgan del id del producto y
+            // uno que todavía no se ha guardado no lo tiene.
+            if (isEditing) ...[
+              const SizedBox(height: 12),
+              _equivalencesTile(),
+            ],
 
             const SizedBox(height: 20),
             TextFormField(

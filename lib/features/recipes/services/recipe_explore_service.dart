@@ -148,7 +148,8 @@ $historySection
   * Ejemplos buenos: "baked Chilean empanadas golden food", "creamy tomato soup bowl food", "grilled salmon lemon dish".
   * Ejemplos malos: "empanadas", "soup ingredients", "meat and vegetables".
 - `ingredients`: campo OBLIGATORIO. Lista de 4-10 ingredientes con cantidad realista para 2-4 porciones. NUNCA dejes este campo vacío ni lo omitas.
-  * `unit` debe ser uno de: g, kg, ml, L, taza, cucharada, cucharadita, unidad, rodaja, pizca, sobre.
+  * `unit` debe ser uno de: g, kg, ml, L, taza, cucharada, cucharadita, unidad, diente, rodaja, rebanada, hoja, rama, lata, vaso, gota, pizca, puñado, sobre.
+  * Prefiere g, ml o unidad cuando encajen: son las que se descuentan de la despensa sin depender de a cuánto equivale una taza de ese ingrediente.
 - `steps`: campo OBLIGATORIO. Lista de 4-8 pasos de preparación claros y concisos, en español. NUNCA dejes este campo vacío ni lo omitas.
 
 ## FORMATO DE RESPUESTA (obligatorio)

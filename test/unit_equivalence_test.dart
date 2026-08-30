@@ -9,6 +9,7 @@ void main() {
   final now = DateTime(2026, 8, 19);
 
   Product p({
+    String name = 'Harina',
     String unit = 'paquete',
     double? packageSize,
     String? packageBaseUnit,
@@ -18,7 +19,7 @@ void main() {
   }) =>
       Product(
         id: 'p1',
-        name: 'Harina',
+        name: name,
         categoryId: 'c1',
         unit: unit,
         currentQuantity: currentQuantity,
@@ -53,8 +54,21 @@ void main() {
       expect(p(unit: 'ml').convertToRecipeUnit(250, 'L'), 0.25);
     });
 
-    test('no mezcla peso con volumen', () {
-      expect(p(unit: 'kg').convertToRecipeUnit(1, 'ml'), isNull);
+    test('no mezcla peso con volumen si no consta la densidad', () {
+      // Del "Producto X" no se sabe nada, así que un kilo suyo no se puede
+      // pasar a mililitros sin inventarse cuánto abulta.
+      expect(p(name: 'Producto X', unit: 'kg').convertToRecipeUnit(1, 'ml'),
+          isNull);
+    });
+
+    test('con densidad de catálogo sí, y avisa de que es estimada', () {
+      // De la harina sí consta: el catálogo dice que una taza pesa 120 g, y
+      // de ahí sale que un kilo son unos dos litros y pico. Se responde, pero
+      // marcado, porque no es la harina de esta despensa sino una de tabla.
+      final amount = p(unit: 'kg').amountInRecipeUnit(1, 'ml');
+      expect(amount, isNotNull);
+      expect(amount!.value, closeTo(2083.3, 0.1));
+      expect(amount.isEstimate, isTrue);
     });
   });
 
@@ -73,14 +87,21 @@ void main() {
     });
 
     test('sin equivalencia declarada devuelve null, no adivina', () {
-      expect(p().convertToRecipeUnit(2, 'g'), isNull);
-      expect(p(packageSize: 0, packageBaseUnit: 'kg').convertToRecipeUnit(2, 'g'),
+      // "Paquete" no dice nada por sí solo, y del "Producto X" tampoco consta
+      // nada en el catálogo: no hay de dónde sacar los gramos.
+      final x = p(name: 'Producto X');
+      expect(x.convertToRecipeUnit(2, 'g'), isNull);
+      expect(
+        p(name: 'Producto X', packageSize: 0, packageBaseUnit: 'kg')
+            .convertToRecipeUnit(2, 'g'),
+        isNull,
+      );
+      expect(p(name: 'Producto X', packageSize: 1).convertToRecipeUnit(2, 'g'),
           isNull);
-      expect(p(packageSize: 1).convertToRecipeUnit(2, 'g'), isNull);
     });
 
     test('equivalencia a una magnitud incompatible devuelve null', () {
-      final x = p(packageSize: 1, packageBaseUnit: 'kg');
+      final x = p(name: 'Producto X', packageSize: 1, packageBaseUnit: 'kg');
       expect(x.convertToRecipeUnit(2, 'ml'), isNull);
     });
   });

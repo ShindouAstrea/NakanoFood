@@ -78,11 +78,30 @@ void main() {
     });
 
     test('sin equivalencia declarada devuelve null, no adivina', () {
-      expect(product(unit: 'paquete').convertFromRecipeUnit(200, 'g'), isNull);
+      // Un ingrediente del que no consta nada: ni su ficha ni el catálogo
+      // dicen cuántos gramos trae un paquete.
+      expect(
+        product(name: 'Producto X', unit: 'paquete')
+            .convertFromRecipeUnit(200, 'g'),
+        isNull,
+      );
     });
 
-    test('no mezcla peso con volumen', () {
-      expect(product(unit: 'kg').convertFromRecipeUnit(200, 'ml'), isNull);
+    test('no mezcla peso con volumen si no consta la densidad', () {
+      expect(
+        product(name: 'Producto X', unit: 'kg').convertFromRecipeUnit(200, 'ml'),
+        isNull,
+      );
+    });
+
+    test('de volumen a peso cuando el catálogo sabe del ingrediente', () {
+      // Lo que motivó todo esto: la receta mide en cucharadas y la despensa
+      // pesa. Una cucharada de azúcar son 12 g, así que 8 son 96 g → 0,096 kg.
+      final azucar = product(name: 'Azúcar', unit: 'kg');
+      final amount = azucar.amountInProductUnit(8, 'cucharada');
+      expect(amount, isNotNull);
+      expect(amount!.value, closeTo(0.096, 0.001));
+      expect(amount.isEstimate, isTrue);
     });
 
     test('es el inverso exacto de convertToRecipeUnit', () {
@@ -126,10 +145,36 @@ void main() {
     });
 
     test('unidades que no se pueden equiparar no se descuentan', () {
-      final line = plan([ing(unit: 'taza')], [product(unit: 'kg')]).lines.single;
+      final line = plan(
+        [ing(name: 'Producto X', unit: 'taza')],
+        [product(name: 'Producto X', unit: 'kg')],
+      ).lines.single;
 
       expect(line.status, DeductionStatus.unconvertible);
       expect(line.productAmount, isNull);
+      expect(line.isDeductible, isFalse);
+    });
+
+    test('una taza de harina sí se descuenta, marcada como estimada', () {
+      // El mismo caso de arriba pero con un ingrediente del que el catálogo
+      // sabe: una taza de harina son 120 g, y la despensa la guarda en kg.
+      final line = plan(
+        [ing(name: 'Harina', quantity: 2, unit: 'taza')],
+        [product(name: 'Harina', unit: 'kg', quantity: 3)],
+      ).lines.single;
+
+      expect(line.status, DeductionStatus.ok);
+      expect(line.productAmount, 0.24);
+      expect(line.isEstimate, isTrue);
+    });
+
+    test('una cantidad "al gusto" no se descuenta, y no es un error', () {
+      final line = plan(
+        [ing(name: 'Harina', quantity: 1, unit: 'al gusto')],
+        [product(name: 'Harina', unit: 'kg')],
+      ).lines.single;
+
+      expect(line.status, DeductionStatus.unquantified);
       expect(line.isDeductible, isFalse);
     });
 
@@ -198,13 +243,46 @@ void main() {
       expect(line.productAmount, 2);
     });
 
-    test('sin la equivalencia declarada no se inventa el descuento', () {
+    test('la equivalencia declarada le gana al catálogo', () {
+      // El catálogo dice que una papa pesa unos 150 g, pero esta despensa
+      // declara que su kilo trae 6: mandan las 6, y sin marca de estimado.
+      final line = plan(
+        [ing(name: 'Papas', quantity: 3, unit: 'unidad')],
+        [papas()],
+      ).lines.single;
+
+      expect(line.productAmount, 0.5); // 3 ÷ 6, no 3 × 0,15
+      expect(line.isEstimate, isFalse);
+    });
+
+    test('sin declararla se descuenta por catálogo, pero avisando', () {
       final line = plan(
         [ing(name: 'Papas', quantity: 3, unit: 'unidad')],
         [
           Product(
             id: 'p-papas',
             name: 'Papas',
+            categoryId: 'c1',
+            unit: 'kg',
+            currentQuantity: 2,
+            createdAt: now,
+            updatedAt: now,
+          )
+        ],
+      ).lines.single;
+
+      expect(line.status, DeductionStatus.ok);
+      expect(line.productAmount, closeTo(0.45, 0.001));
+      expect(line.isEstimate, isTrue);
+    });
+
+    test('de un ingrediente que nadie conoce sigue sin inventarse nada', () {
+      final line = plan(
+        [ing(name: 'Azafrán', quantity: 3, unit: 'unidad')],
+        [
+          Product(
+            id: 'p-azafran',
+            name: 'Azafrán',
             categoryId: 'c1',
             unit: 'kg',
             currentQuantity: 2,

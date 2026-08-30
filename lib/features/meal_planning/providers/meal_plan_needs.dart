@@ -1,4 +1,5 @@
 import '../../../shared/utils/number_input.dart';
+import '../../../shared/utils/unit_conversion.dart';
 import '../../pantry/models/product.dart';
 import '../../recipes/models/recipe.dart';
 import '../../recipes/providers/pantry_index.dart';
@@ -41,19 +42,28 @@ class PlannedNeed {
 class UnplannedIngredient {
   final String name;
 
-  /// Unidad del producto en la despensa. Null si el producto no existe.
-  final String? productUnit;
+  /// El producto de la despensa con el que sí cruzó. Null cuando el problema
+  /// es que no existe; cuando existe, va aquí para que la pantalla pueda
+  /// ofrecer declarar la equivalencia sin ir a buscarlo otra vez.
+  final Product? product;
 
   /// Unidad en que lo pide la receta.
   final String recipeUnit;
 
   const UnplannedIngredient({
     required this.name,
-    required this.productUnit,
+    required this.product,
     required this.recipeUnit,
   });
 
-  bool get isMissingFromPantry => productUnit == null;
+  bool get isMissingFromPantry => product == null;
+
+  /// Unidad del producto en la despensa. Null si el producto no existe.
+  String? get productUnit => product?.unit;
+
+  /// La receta no dice una cantidad ("al gusto"): no hay nada que comprar por
+  /// ella, y no es un dato que al usuario le falte por dar.
+  bool get isUnquantified => isUnquantifiedUnit(recipeUnit);
 }
 
 /// Lo que hay que comprar para cocinar lo planificado en un rango de fechas.
@@ -81,13 +91,14 @@ class MealPlanNeeds {
     required List<Product> products,
     required DateTime from,
     required DateTime to,
+    UnitConverter? converter,
   }) {
     final fromDay = DateTime(from.year, from.month, from.day);
     final toDay = DateTime(to.year, to.month, to.day);
     final byRecipeId = {for (final recipe in recipes) recipe.id: recipe};
     // El mismo cruce que usan el detalle de la receta y el descuento al
     // cocinar: lo que la app dice que falta tiene que salir de un solo sitio.
-    final pantry = PantryIndex.from(products);
+    final pantry = PantryIndex.from(products, converter: converter);
 
     final neededByProduct = <String, double>{};
     final mealsByProduct = <String, int>{};
@@ -122,21 +133,22 @@ class MealPlanNeeds {
               normalizeName(ingredient.productName),
               () => UnplannedIngredient(
                 name: ingredient.productName,
-                productUnit: null,
+                product: null,
                 recipeUnit: ingredient.unit,
               ),
             );
             continue;
           }
 
-          final inProductUnits =
-              product.convertFromRecipeUnit(ingredient.quantity, ingredient.unit);
+          final inProductUnits = product.convertFromRecipeUnit(
+              ingredient.quantity, ingredient.unit,
+              converter: pantry.converter);
           if (inProductUnits == null) {
             skipped.putIfAbsent(
               '${product.id}|${ingredient.unit}',
               () => UnplannedIngredient(
                 name: product.name,
-                productUnit: product.unit,
+                product: product,
                 recipeUnit: ingredient.unit,
               ),
             );

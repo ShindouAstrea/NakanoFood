@@ -8,6 +8,8 @@ import '../../meal_planning/providers/meal_planning_provider.dart';
 import '../../recipes/providers/recipe_provider.dart';
 import '../providers/pantry_provider.dart';
 import '../providers/shopping_provider.dart';
+import '../providers/unit_conversion_provider.dart';
+import 'unit_equivalence_sheet.dart';
 
 /// Abre la hoja que arma la lista de compras con lo que falta para cocinar el
 /// plan de comidas.
@@ -87,6 +89,7 @@ class _PlanShoppingSheetState extends ConsumerState<PlanShoppingSheet> {
             products: productsAsync.value!,
             from: _from,
             to: _to,
+            converter: ref.watch(unitConverterProvider),
           );
 
     final selectedCount = plan == null
@@ -313,12 +316,18 @@ class _PlanShoppingSheetState extends ConsumerState<PlanShoppingSheet> {
 
   Widget _skippedTile(
       ThemeData theme, ColorScheme cs, UnplannedIngredient ingredient) {
-    // Los dos motivos se arreglan en sitios distintos, así que se dicen por
-    // separado: uno creando el producto, el otro declarando su equivalencia.
+    // Cada motivo se arregla en un sitio distinto —o en ninguno—, así que se
+    // dicen por separado: uno creando el producto, otro declarando la
+    // equivalencia, y el tercero no se arregla porque no falta ningún dato.
     final reason = ingredient.isMissingFromPantry
         ? 'no está en la despensa'
-        : 'no consta cuántos ${ingredient.recipeUnit} rinde '
-            '1 ${ingredient.productUnit}';
+        : ingredient.isUnquantified
+            ? 'la receta no dice cuánto (${ingredient.recipeUnit})'
+            : 'no consta cuántos ${ingredient.recipeUnit} rinde '
+                '1 ${ingredient.productUnit}';
+
+    final product = ingredient.product;
+    final canDeclare = product != null && !ingredient.isUnquantified;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 3, 12, 3),
@@ -343,6 +352,26 @@ class _PlanShoppingSheetState extends ConsumerState<PlanShoppingSheet> {
                   ?.copyWith(color: cs.onSurface.withAlpha(150)),
             ),
           ),
+          // Se arregla desde aquí: la lista de la compra es donde se nota que
+          // falta —el ingrediente no aparece ni como comprado ni como
+          // cubierto—, y mandar al usuario a buscar el producto para volver
+          // después es como no ofrecerlo.
+          if (canDeclare)
+            TextButton(
+              onPressed: () => declareUnitEquivalence(
+                context,
+                ref,
+                product: product,
+                recipeUnit: ingredient.recipeUnit,
+              ),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Declarar'),
+            ),
         ],
       ),
     );

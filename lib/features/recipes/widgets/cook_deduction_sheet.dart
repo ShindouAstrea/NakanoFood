@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/utils/number_input.dart';
 import '../../pantry/models/product.dart';
 import '../../pantry/providers/pantry_provider.dart';
+import '../../pantry/providers/unit_conversion_provider.dart';
 import '../../pantry/widgets/product_picker.dart';
 import '../../pantry/widgets/quick_add_product.dart';
+import '../../pantry/widgets/unit_equivalence_sheet.dart';
 import '../models/recipe.dart';
 import '../providers/cook_deduction.dart';
 import '../providers/recipe_provider.dart';
@@ -27,6 +29,7 @@ Future<void> confirmCooked(
     recipe: recipe,
     products: products,
     multiplier: multiplier,
+    converter: ref.read(unitConverterProvider),
   );
 
   if (!context.mounted) return;
@@ -148,6 +151,7 @@ class _CookDeductionSheetState extends ConsumerState<CookDeductionSheet> {
       recipe: _recipe,
       products: products,
       multiplier: widget.multiplier,
+      converter: ref.watch(unitConverterProvider),
     );
     return CookDeduction([
       for (final line in base.lines)
@@ -269,6 +273,18 @@ class _CookDeductionSheetState extends ConsumerState<CookDeductionSheet> {
                     for (final line in skipped)
                       _skippedTile(line, theme, products),
                   ],
+                  // Al final y solo si hace falta: explica el "≈" sin empujar
+                  // hacia abajo lo que el usuario sí tiene que tocar.
+                  if (lines.any((l) => l.isEstimate))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+                      child: Text(
+                        '≈ equivalencia de referencia. Si en tu caso es otra, '
+                        'decláralo en el producto y manda la tuya.',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurface.withAlpha(130)),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                 ],
               ),
@@ -332,7 +348,11 @@ class _CookDeductionSheetState extends ConsumerState<CookDeductionSheet> {
           '${product.unit}: quedará en 0';
       warns = true;
     } else {
-      detail = 'Quedan ${formatQuantity(line.remainingAfter!)} ${product.unit}';
+      // El "≈" no es un adorno: separa lo que sale de la ficha de este
+      // producto de lo que sale de una tabla de cocina general.
+      final approx = line.isEstimate ? '≈' : '';
+      detail = 'Quedan $approx${formatQuantity(line.remainingAfter!)} '
+          '${product.unit}';
       warns = false;
     }
 
@@ -407,16 +427,48 @@ class _CookDeductionSheetState extends ConsumerState<CookDeductionSheet> {
     );
   }
 
+  /// Declara a cuánto equivale la unidad de la receta y recalcula la hoja.
+  Future<void> _declare(DeductionLine line) async {
+    final product = line.product;
+    if (product == null) return;
+    final saved = await declareUnitEquivalence(
+      context,
+      ref,
+      product: product,
+      recipeUnit: line.ingredient.unit,
+    );
+    // No hace falta tocar nada más: el plan se recalcula solo porque `build`
+    // observa las equivalencias, y la línea salta de "no se descuenta" a la
+    // lista de arriba sin cerrar la hoja.
+    if (saved && mounted) setState(() {});
+  }
+
+  Widget _fixButton(String label, VoidCallback onPressed) => TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(label),
+      );
+
   Widget _skippedTile(
       DeductionLine line, ThemeData theme, List<Product> products) {
     final cs = theme.colorScheme;
-    // Cada motivo se arregla en un sitio distinto, así que se dicen por
-    // separado en vez de un "no se pudo" que deja al usuario adivinando.
+    // Cada motivo se arregla en un sitio distinto —o en ninguno—, así que se
+    // dicen por separado en vez de un "no se pudo" que deja al usuario
+    // adivinando cuál de los tres le tocó.
     final missing = line.status == DeductionStatus.unmatched;
-    final reason = missing
-        ? 'no está en la despensa'
-        : 'no consta cuántos ${line.ingredient.unit} rinde '
-            '1 ${line.product!.unit}';
+    final unquantified = line.status == DeductionStatus.unquantified;
+    final reason = switch (line.status) {
+      DeductionStatus.unmatched => 'no está en la despensa',
+      DeductionStatus.unquantified =>
+        'la receta no dice cuánto (${line.ingredient.unit})',
+      _ => 'no consta cuántos ${line.ingredient.unit} rinde '
+          '1 ${line.product!.unit}',
+    };
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 3, 12, 3),
@@ -440,19 +492,19 @@ class _CookDeductionSheetState extends ConsumerState<CookDeductionSheet> {
                   ?.copyWith(color: cs.onSurface.withAlpha(150)),
             ),
           ),
-          // Solo cuando falta el producto: si el problema son las unidades,
-          // vincular con otro producto no arregla nada.
+          // Cada botón arregla su motivo. Vincular no sirve de nada si el
+          // problema son las unidades, y declarar la equivalencia no sirve si
+          // todavía no hay producto al que atarla. Y "al gusto" no se arregla:
+          // ofrecer un botón ahí sería mandar al usuario a una tarea que no
+          // existe.
+          //
+          // "Declarar" a secas y no "Declarar equivalencia": el texto de la
+          // izquierda ya dice qué falta, y la etiqueta larga desborda la fila
+          // en un teléfono de 320.
           if (missing)
-            TextButton(
-              onPressed: () => _link(line, products),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('Vincular'),
-            ),
+            _fixButton('Vincular', () => _link(line, products))
+          else if (!unquantified)
+            _fixButton('Declarar', () => _declare(line)),
         ],
       ),
     );

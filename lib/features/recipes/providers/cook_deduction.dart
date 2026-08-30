@@ -1,4 +1,6 @@
 import '../../../shared/utils/number_input.dart';
+import '../../../shared/utils/unit_conversion.dart';
+import '../../pantry/data/unit_conversion_seed.dart';
 import '../../pantry/models/product.dart';
 import '../models/recipe.dart';
 import 'pantry_index.dart';
@@ -23,6 +25,11 @@ enum DeductionStatus {
   /// Hay producto, pero no consta a cuánto equivale su unidad en la de la
   /// receta: descontar obligaría a inventarse el factor.
   unconvertible,
+
+  /// La receta no dice cuánto: "sal, al gusto". No es que falte información
+  /// que el usuario pueda dar —no hay cantidad—, así que ofrecerle arreglarlo
+  /// sería mandarlo a una tarea que no existe.
+  unquantified,
 }
 
 /// Un ingrediente de la receta frente al producto de la despensa que le toca.
@@ -42,12 +49,26 @@ class DeductionLine {
 
   final DeductionStatus status;
 
+  /// La conversión se apoyó en una equivalencia de referencia (cuánto pesa una
+  /// taza de harina) y no en algo que conste de este producto.
+  ///
+  /// No impide descontar —negarse a mover el stock por eso sería peor—, pero
+  /// se dice: el usuario tiene que poder distinguir el número que sale de su
+  /// propia ficha del que sale de una tabla de cocina.
+  final bool isEstimate;
+
+  /// Las equivalencias con las que se resolvió, para poder rehacer el cálculo
+  /// cuando el usuario corrige la cantidad sin salir de la hoja.
+  final UnitConverter converter;
+
   const DeductionLine._({
     required this.ingredient,
     required this.product,
     required this.recipeAmount,
     required this.productAmount,
     required this.status,
+    required this.isEstimate,
+    required this.converter,
   });
 
   /// Resuelve la conversión y el estado de una línea.
@@ -55,31 +76,33 @@ class DeductionLine {
     required RecipeIngredient ingredient,
     required Product? product,
     required double recipeAmount,
+    UnitConverter? converter,
   }) {
     final amount = roundQuantity(recipeAmount);
+    final rules = converter ?? seededConverter;
 
-    if (product == null) {
-      return DeductionLine._(
-        ingredient: ingredient,
-        product: null,
-        recipeAmount: amount,
-        productAmount: null,
-        status: DeductionStatus.unmatched,
-      );
+    DeductionLine skip(DeductionStatus status) => DeductionLine._(
+          ingredient: ingredient,
+          product: product,
+          recipeAmount: amount,
+          productAmount: null,
+          status: status,
+          isEstimate: false,
+          converter: rules,
+        );
+
+    // Se comprueba antes que el producto porque "sal, al gusto" no se arregla
+    // creando la sal: no hay nada que descontar aunque esté en la despensa.
+    if (isUnquantifiedUnit(ingredient.unit)) {
+      return skip(DeductionStatus.unquantified);
     }
+    if (product == null) return skip(DeductionStatus.unmatched);
 
-    final inProductUnits = product.convertFromRecipeUnit(amount, ingredient.unit);
-    if (inProductUnits == null) {
-      return DeductionLine._(
-        ingredient: ingredient,
-        product: product,
-        recipeAmount: amount,
-        productAmount: null,
-        status: DeductionStatus.unconvertible,
-      );
-    }
+    final inProductUnits =
+        product.amountInProductUnit(amount, ingredient.unit, converter: rules);
+    if (inProductUnits == null) return skip(DeductionStatus.unconvertible);
 
-    final toDeduct = roundQuantity(inProductUnits);
+    final toDeduct = roundQuantity(inProductUnits.value);
     return DeductionLine._(
       ingredient: ingredient,
       product: product,
@@ -88,6 +111,8 @@ class DeductionLine {
       status: toDeduct > product.currentQuantity
           ? DeductionStatus.partial
           : DeductionStatus.ok,
+      isEstimate: inProductUnits.isEstimate,
+      converter: rules,
     );
   }
 
@@ -97,6 +122,7 @@ class DeductionLine {
         ingredient: ingredient,
         product: product,
         recipeAmount: amount,
+        converter: converter,
       );
 
   bool get isDeductible => productAmount != null;
@@ -126,16 +152,18 @@ class CookDeduction {
     required Recipe recipe,
     required List<Product> products,
     double multiplier = 1,
+    UnitConverter? converter,
   }) {
     // El mismo cruce que usan el detalle y "¿Qué puedo cocinar?": lo que la
     // app dice que tienes y lo que descuenta tienen que salir de un solo sitio.
-    final pantry = PantryIndex.from(products);
+    final pantry = PantryIndex.from(products, converter: converter);
     return CookDeduction([
       for (final ingredient in recipe.ingredients)
         DeductionLine.resolve(
           ingredient: ingredient,
           product: pantry.matchFor(ingredient),
           recipeAmount: ingredient.quantity * multiplier,
+          converter: pantry.converter,
         ),
     ]);
   }

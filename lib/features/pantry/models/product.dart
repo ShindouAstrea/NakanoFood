@@ -1,3 +1,6 @@
+import '../../../shared/utils/unit_conversion.dart';
+import '../data/unit_conversion_seed.dart';
+
 class ProductCategory {
   final String id;
   final String name;
@@ -263,79 +266,80 @@ class Product {
   bool get hasPackageEquivalence =>
       packageSize != null && packageSize! > 0 && packageBaseUnit != null;
 
-  /// Convierte [quantity] de este producto a [targetUnit], o null si no se
-  /// puede afirmar la equivalencia.
+  /// La equivalencia que el propio producto declara en su ficha, como arista
+  /// para el conversor: una unidad de [unit] son [packageSize] de la base.
+  List<UnitEdge> get _packageEdges => hasPackageEquivalence
+      ? [
+          UnitEdge(
+            from: canonicalUnit(unit),
+            to: canonicalUnit(packageBaseUnit!),
+            factor: packageSize!,
+          ),
+        ]
+      : const [];
+
+  /// Convierte [quantity] de este producto a [targetUnit], con la marca de si
+  /// el resultado se apoya en alguna equivalencia estimada.
   ///
-  /// Devolver null a propósito en vez de un número aproximado: es preferible
-  /// mostrar "no se sabe" a decirle al usuario que le falta harina cuando le
-  /// sobra. Se resuelve en tres pasos:
-  ///   1. Misma unidad, nada que convertir.
-  ///   2. Conversión métrica directa (g↔kg, ml↔L).
-  ///   3. Vía la equivalencia declarada: 2 paquetes de 1 kg → 2 kg → 2000 g.
-  double? convertToRecipeUnit(double quantity, String targetUnit) {
-    final from = _canonicalUnit(unit);
-    final to = _canonicalUnit(targetUnit);
-    if (from == to) return quantity;
+  /// Devuelve null a propósito en vez de un número aproximado cuando no hay
+  /// forma de afirmarlo: es preferible mostrar "no se sabe" a decirle al
+  /// usuario que le falta harina cuando le sobra.
+  ///
+  /// El encadenado lo resuelve [UnitConverter]: de 'paquete' a 'kg' por lo que
+  /// declara la ficha, de 'kg' a 'g' porque es exacto, y de 'g' a 'cucharada'
+  /// por lo que se sepa de ese ingrediente en concreto. Sin [converter] solo
+  /// se cuenta con el catálogo de referencia, no con lo que haya declarado el
+  /// usuario.
+  UnitAmount? amountInRecipeUnit(
+    double quantity,
+    String targetUnit, {
+    UnitConverter? converter,
+  }) =>
+      (converter ?? seededConverter).convert(
+        quantity,
+        from: unit,
+        to: targetUnit,
+        productId: id,
+        ingredientKey: name,
+        extraEdges: _packageEdges,
+      );
 
-    final direct = _metricFactor(from, to);
-    if (direct != null) return quantity * direct;
-
-    if (!hasPackageEquivalence) return null;
-
-    // Una unidad del producto equivale a packageSize de packageBaseUnit.
-    final base = _canonicalUnit(packageBaseUnit!);
-    final inBase = quantity * packageSize!;
-    if (base == to) return inBase;
-
-    final fromBase = _metricFactor(base, to);
-    return fromBase == null ? null : inBase * fromBase;
-  }
+  /// [amountInRecipeUnit] cuando solo interesa el número.
+  double? convertToRecipeUnit(
+    double quantity,
+    String targetUnit, {
+    UnitConverter? converter,
+  }) =>
+      amountInRecipeUnit(quantity, targetUnit, converter: converter)?.value;
 
   /// Cuántas unidades de este producto son [quantity] de [recipeUnit].
   ///
-  /// Inverso de [convertToRecipeUnit], y lo que hace falta para descontar: la
-  /// receta pide 200 g, la despensa guarda la harina en kg, y del stock hay
-  /// que restar 0,2. Devuelve null exactamente en los mismos casos y por la
-  /// misma razón: restar con un factor inventado vacía la despensa de golpe,
-  /// y un error de 1000 aquí es la diferencia entre un gramo y un kilo.
-  double? convertFromRecipeUnit(double quantity, String recipeUnit) {
-    final oneUnitInRecipeUnits = convertToRecipeUnit(1, recipeUnit);
-    if (oneUnitInRecipeUnits == null || oneUnitInRecipeUnits == 0) return null;
-    return quantity / oneUnitInRecipeUnits;
-  }
+  /// Es lo que hace falta para descontar: la receta pide 200 g, la despensa
+  /// guarda la harina en kg, y del stock hay que restar 0,2. Devuelve null en
+  /// los mismos casos y por la misma razón: restar con un factor inventado
+  /// vacía la despensa de golpe, y un error de 1000 aquí es la diferencia
+  /// entre un gramo y un kilo.
+  UnitAmount? amountInProductUnit(
+    double quantity,
+    String recipeUnit, {
+    UnitConverter? converter,
+  }) =>
+      (converter ?? seededConverter).convert(
+        quantity,
+        from: recipeUnit,
+        to: unit,
+        productId: id,
+        ingredientKey: name,
+        extraEdges: _packageEdges,
+      );
 
-  /// Normaliza sinónimos de unidad ('litro' y 'L' son lo mismo).
-  static String _canonicalUnit(String u) {
-    final s = u.trim().toLowerCase();
-    const synonyms = {
-      'litro': 'l',
-      'litros': 'l',
-      'gr': 'g',
-      'gramo': 'g',
-      'gramos': 'g',
-      'kilo': 'kg',
-      'kilos': 'kg',
-      'kilogramo': 'kg',
-      'kilogramos': 'kg',
-      'mililitro': 'ml',
-      'mililitros': 'ml',
-      'unidades': 'unidad',
-      'un': 'unidad',
-    };
-    return synonyms[s] ?? s;
-  }
-
-  /// Factor entre unidades métricas de la misma magnitud, null si no aplica.
-  static double? _metricFactor(String from, String to) {
-    const weight = {'g': 1.0, 'kg': 1000.0};
-    const volume = {'ml': 1.0, 'l': 1000.0};
-    for (final scale in [weight, volume]) {
-      final a = scale[from];
-      final b = scale[to];
-      if (a != null && b != null) return a / b;
-    }
-    return null;
-  }
+  /// [amountInProductUnit] cuando solo interesa el número.
+  double? convertFromRecipeUnit(
+    double quantity,
+    String recipeUnit, {
+    UnitConverter? converter,
+  }) =>
+      amountInProductUnit(quantity, recipeUnit, converter: converter)?.value;
 
   double get neededQuantity =>
       isLow ? (quantityToMaintain - currentQuantity) : 0;

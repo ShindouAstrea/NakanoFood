@@ -22,7 +22,7 @@ class DatabaseHelper {
         : join(await getDatabasesPath(), filePath);
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       // SQLite trae las foreign keys DESACTIVADAS en cada conexión: sin esto
       // los ON DELETE CASCADE del esquema no se ejecutan y borrar una receta
       // o un producto deja sus filas hijas huérfanas para siempre.
@@ -209,7 +209,37 @@ class DatabaseHelper {
         }
       }
     }
+
+    if (oldVersion < 11) {
+      // Equivalencias declaradas entre unidades. Sin esto, una receta que pide
+      // cucharadas no se podía descontar de un producto guardado en kilos:
+      // faltaba dónde anotar cuánto pesa una cucharada de ese ingrediente.
+      try {
+        await db.execute(_createUnitConversions);
+      } catch (e) {
+        debugPrint('[DatabaseHelper] migración v11: $e');
+      }
+    }
   }
+
+  /// El esquema de `unit_conversions`, compartido entre la creación limpia y
+  /// la migración para que no puedan quedar distintos.
+  static const _createUnitConversions = '''
+    CREATE TABLE unit_conversions (
+      id TEXT PRIMARY KEY,
+      product_id TEXT,
+      ingredient_key TEXT,
+      from_qty REAL NOT NULL,
+      from_unit TEXT NOT NULL,
+      to_qty REAL NOT NULL,
+      to_unit TEXT NOT NULL,
+      is_estimate INTEGER DEFAULT 0,
+      user_id TEXT,
+      updated_at TEXT,
+      synced_at TEXT,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+  ''';
 
   Future<void> _createDB(Database db, int version) async {
     await db.execute('''
@@ -462,6 +492,8 @@ class DatabaseHelper {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     ''');
+
+    await db.execute(_createUnitConversions);
 
     await db.execute('''
       CREATE TABLE pending_deletes (

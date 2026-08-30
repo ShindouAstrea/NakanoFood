@@ -40,6 +40,7 @@ const _uploadOrder = [
   'product_categories',
   'product_subcategories',
   'products',
+  'unit_conversions',
   'nutritional_values',
   'product_price_history',
   'recipes',
